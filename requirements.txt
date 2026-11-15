@@ -1,0 +1,5 @@
+numpy>=1.26
+matplotlib>=3.8
+pytest>=8.0
+# Installe le dossier src/vitesse comme un package Python (pour pouvoir écrire "from vitesse import ...")
+-e .
