@@ -10,7 +10,7 @@ from vitesse import Noise
 # ----------------------------------------------------------------------
 # 1. PARAMETRES
 # ----------------------------------------------------------------------
-SIGMA = 2.0                          # écart-type du bruit testé [m/s]
+SIGMA = 2.0                          # écart-type du bruit testé [km/h]
 N_TIRAGES = 200_000                  # beaucoup de tirages -> les statistiques sont précises
 GRAINE = 0                           # graine aléatoire (résultats reproductibles)
 

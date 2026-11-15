@@ -9,6 +9,22 @@ entre plusieurs appels, comme les coefficients d'un polynôme).
 import numpy as np
 
 
+def create_rng(seed=None):
+    """Crée le générateur de nombres aléatoires du programme et renvoie  (rng, graine_utilisee).
+
+    seed = un entier (ex. 42) : on utilise cette graine -> mêmes tirages à chaque lancement.
+    seed = None               : on tire NOUS-MÊMES une graine au hasard, puis on l'utilise.
+                                Les tirages changent à chaque lancement, mais comme on connaît la graine
+                                utilisée (elle est renvoyée), on peut l'afficher et la réutiliser plus tard
+                                pour regénérer exactement les mêmes données.
+
+    (Si on écrivait simplement np.random.default_rng() sans graine, numpy choisirait une graine en
+    interne et on ne pourrait plus la retrouver : c'est pour cela qu'on la tire nous-mêmes.)"""
+    if seed is None:
+        seed = int(np.random.default_rng().integers(0, 2**32))     # entier au hasard entre 0 et 4 294 967 295
+    return np.random.default_rng(seed), seed
+
+
 def generate_positions(n_points, length, rng):
     """Tire n_points positions au hasard (uniformément) sur le tronçon [0, length] en mètres.
 

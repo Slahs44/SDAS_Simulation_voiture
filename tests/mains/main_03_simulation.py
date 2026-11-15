@@ -5,27 +5,27 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from vitesse import Noise, SpeedPolynomial, generate_positions, simulate_speeds
+from vitesse import Noise, SpeedPolynomial, create_rng, generate_positions, simulate_speeds
 
 # ----------------------------------------------------------------------
 # 1. PARAMETRES  (modifie ici, pas dans le reste du script)
 # ----------------------------------------------------------------------
-LONGUEUR = 2000.0                    # longueur du tronçon [m]
-V0 = 70.0                            # vitesse au début du tronçon [km/h]
-VL = 80.0                            # vitesse à la fin du tronçon [km/h] (doit être <= V_LIMITE)
+LONGUEUR = 1500.0                    # longueur du tronçon [m]
+V0 = 40.0                            # vitesse au début du tronçon [km/h]
+VL = 35.0                            # vitesse à la fin du tronçon [km/h] (doit être <= V_LIMITE)
 V_LIMITE = 90.0                      # limite de vitesse du tronçon [km/h]
-D = 2                                # degré du polynôme
-A_MAX_G = 2.0                        # accélération maximale autorisée [g] (voiture normale : 0,1 à 0,3 g)
+D = 4                                # degré du polynôme
+A_MAX_G = 0.3                        # accélération maximale autorisée [g] (voiture normale : 0,1 à 0,3 g)
 COEFS_LIBRES = None                  # None = calcul automatique ; ou une liste [c2, ..., cd] (D-1 valeurs) à la main
 LOI = "normale"                      # loi du bruit
-SIGMA = 5.0                          # écart-type du bruit [km/h]
-N_POINTS = 100                       # nombre de points mesurés
-GRAINE = 42                          # graine aléatoire (même graine = mêmes résultats)
+SIGMA = 15.0                          # écart-type du bruit [km/h]
+N_POINTS = 1000                       # nombre de points mesurés
+GRAINE = None                        # None = aléatoire à chaque lancement (la graine utilisée est affichée) ; un entier (ex. 42) = toujours les mêmes données
 AFFICHER = True                      # True : ouvre la fenêtre du graphique ; False : sauvegarde seulement
 
 
 def main():
-    rng = np.random.default_rng(GRAINE)             # UN seul générateur aléatoire pour tout le programme
+    rng, graine = create_rng(GRAINE)                # UN seul générateur aléatoire pour tout le programme, et la graine utilisée
 
     # 1) La vraie vitesse, et le bruit
     poly = SpeedPolynomial(LONGUEUR, V0, VL, D, COEFS_LIBRES, speed_limit=V_LIMITE, max_acceleration_g=A_MAX_G)
@@ -51,13 +51,14 @@ def main():
     plt.plot(grille, poly.speed(grille), "b-", lw=2, label="vraie vitesse v(x)")   # courbe bleue (les croix sont rouges)
     plt.xlabel("position x [m]")
     plt.ylabel("vitesse [km/h]")
-    plt.title(f"Simulation : degre {D}, bruit {LOI} sigma = {SIGMA}")
+    plt.title(f"Simulation : degre {D}, bruit {LOI} sigma = {SIGMA} (graine {graine})")
     plt.grid(alpha=0.3)
     plt.legend()
 
     dossier = Path(__file__).resolve().parents[2] / "figures"
     dossier.mkdir(exist_ok=True)
     plt.savefig(dossier / "03_simulation.png", dpi=150)
+    print(f"graine utilisee : {graine}   (pour regenerer exactement les memes donnees : GRAINE = {graine})")
     if AFFICHER:
         plt.show()
 

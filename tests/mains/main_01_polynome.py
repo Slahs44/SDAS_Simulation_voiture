@@ -12,12 +12,12 @@ from vitesse import SpeedPolynomial
 # ----------------------------------------------------------------------
 # 1. PARAMETRES  (modifie ici, pas dans le reste du script)
 # ----------------------------------------------------------------------
-LONGUEUR = 1000.0                    # longueur du tronçon [m]
-V0 = 35.0                            # vitesse au début du tronçon [km/h]
-VL = 20.0                            # vitesse à la fin du tronçon [km/h] (doit être <= V_LIMITE)
+LONGUEUR = 1500.0                    # longueur du tronçon [m]
+V0 = 40.0                            # vitesse au début du tronçon [km/h]
+VL = 35.0                            # vitesse à la fin du tronçon [km/h] (doit être <= V_LIMITE)
 V_LIMITE = 90.0                      # limite de vitesse du tronçon [km/h]
 D = 6                                # degré du polynôme (essaie 3 ou 4 : la courbe colle plus longtemps à 90)
-A_MAX_G = 0.3                        # accélération maximale autorisée [g] (1 g = 9,81 m/s² ; voiture normale : 0,1 à 0,3 g)
+A_MAX_G = 2.0                        # accélération maximale autorisée [g] (1 g = 9,81 m/s² ; voiture normale : 0,1 à 0,3 g)
 COEFS_LIBRES = None                  # None = calcul automatique ; ou une liste [c2, ..., cd] (D-1 valeurs) à la main
 AFFICHER = True                      # True : ouvre la fenêtre du graphique ; False : sauvegarde seulement
 
