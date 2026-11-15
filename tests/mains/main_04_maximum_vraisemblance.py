@@ -11,17 +11,18 @@ from vitesse import MaximumLikelihood, Noise, SpeedPolynomial, create_rng, gener
 # ----------------------------------------------------------------------
 # 1. PARAMETRES  (modifie ici, pas dans le reste du script)
 # ----------------------------------------------------------------------
-LONGUEUR = 2000.0                    # longueur du tronçon [m]
-V0 = 70.0                            # vitesse au début du tronçon [km/h]
-VL = 80.0                            # vitesse à la fin du tronçon [km/h]
-V_LIMITE = 90.0                      # limite de vitesse [km/h]
-D = 2                                # degré du VRAI polynôme
-COEFS_LIBRES = None                  # None = calcul automatique ; ou une liste [c2, ..., cd]
-SIGMA = 5.0                          # écart-type du bruit [km/h]
-N_POINTS = 100                       # nombre de points mesurés
-D_ESTIME = 2                         # degré utilisé pour l'estimation (en vrai il est « connu » : = D ; essaie D+1 ou D-1)
-GRAINE = None                        # None = aléatoire (graine affichée) ; un entier = reproductible
-AFFICHER = True                      # True : ouvre la fenêtre du graphique ; False : sauvegarde seulement
+LONGUEUR = 1500.0                       # longueur du tronçon [m]
+V0 = 40.0                               # vitesse au début du tronçon [km/h]
+VL = 35.0                               # vitesse à la fin du tronçon [km/h] (doit être <= V_LIMITE)
+V_LIMITE = 90.0                         # limite de vitesse du tronçon [km/h]
+D = 4                                   # degré du polynôme
+COEFS_LIBRES = None                     # None = calcul automatique ; ou une liste [c2, ..., cd]
+SIGMA = 5.0                             # écart-type du bruit [km/h]
+N_POINTS = 1000                          # nombre de points mesurés
+N_SIGMA = 2.0                           # largeur de la bande : ± N_SIGMA · sigma_chapeau (1 -> ~68 % des mesures, 2 -> ~95 %, 3 -> ~99,7 %)
+D_ESTIME = D                            # degré utilisé pour l'estimation (en vrai il est « connu » : = D ; essaie D+1 ou D-1)
+GRAINE = None                           # None = aléatoire (graine affichée) ; un entier = reproductible
+AFFICHER = True                         # True : ouvre la fenêtre du graphique ; False : sauvegarde seulement
 
 
 def main():
@@ -42,13 +43,19 @@ def main():
     grille = np.linspace(0, LONGUEUR, 300)
     erreur = estimateur.speed(grille) - vrai.speed(grille)
     print(f"erreur sur la courbe : RMSE = {np.sqrt(np.mean(erreur ** 2)):.2f} km/h, erreur max = {np.abs(erreur).max():.2f} km/h")
+    centre = estimateur.speed(grille)
+    demi_largeur = N_SIGMA * estimateur.sigma
+    dans_bande = np.abs(v - estimateur.speed(x)) <= demi_largeur
+    print(f"bande ±{N_SIGMA} sigma_chapeau = ±{demi_largeur:.1f} km/h : {np.mean(dans_bande):.0%} des mesures dedans")
     print(f"graine utilisee : {graine}   (pour regenerer : GRAINE = {graine})")
 
     # 4) Tracer
     plt.figure(figsize=(9, 5))
     plt.scatter(x, v, s=25, c="red", marker="+", linewidths=0.8, alpha=0.8, label=f"mesures ({N_POINTS} points)")
     plt.plot(grille, vrai.speed(grille), "b-", lw=2, label="vraie vitesse v(x)")
-    plt.plot(grille, estimateur.speed(grille), "g--", lw=2, label=f"estimation (degre {D_ESTIME})")
+    plt.plot(grille, centre, "g--", lw=2, label=f"estimation (degre {D_ESTIME})")
+    plt.fill_between(grille, centre - demi_largeur, centre + demi_largeur, color="green", alpha=0.15,
+                 label=f"estimation ± {N_SIGMA:g} sigma_chapeau")
     plt.xlabel("position x [m]")
     plt.ylabel("vitesse [km/h]")
     plt.title(f"Maximum de vraisemblance : sigma = {SIGMA} (graine {graine})")

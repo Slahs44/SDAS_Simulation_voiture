@@ -24,23 +24,21 @@ $$
    - Si plusieurs virage --> décéleration puis réaccélération ? Si oui possible correlation avec d et nb virage ? Pour ca voir TP1/2
 
 
-## 3. Ce que je pense faire
-
-1. **Estimateur de base** : moindres carres ordinaires (MCO). C'est le maximum de vraisemblance
-   si le bruit est gaussien i.i.d.
-2. **Caracterisation** : biais, covariance, RMSE de $\hat{v}(x)$ par Monte-Carlo ; comparaison a la
-   borne de Cramer-Rao; sensibilite a $\sigma$, $N$, $d$, au conditionnement (base de Legendre).
-3. **Cas difficile** : montrer ou le MCO casse (aberrants, correlation, mauvais degre), puis proposer des estimateurs robustes (Huber, moindres carres ponderes iteres, RANSAC, mediane, ...) et les comparer au MCO par les memes experiences. (Proposition IA)
-4. **Illustration** : tracer $\hat{v}(x)$ avec bande de confiance sur des exemples simules. J'aimerai reussir à relier les min de mes barres d'erreurs et max entre eux comme sur les carnets de santé pour la taille/poids.
-
-
-## 4. Points bloquants / questions pour lundi
+## 3. Points bloquants / questions pour lundi
 
 **Sur la simulation**
 1. Les positions sont-elles aleatoires uniformes ou imposees (plan d'experience) ? Le nombre
    d'envois par vehicule suit-il une loi precise ? Un véhicule peut envoyer plusieurs valeurs ? A intervalle de distance régulière ? 
 
+2. Est ce que en générant avec RNG mais avec une meme graine une loi uniforme et la loi normale, $x_k$ devient corrélé à $\epsilon_k$ ?
+
 **Sur la robustesse et la caracterisation**
 
-2. Robuste **a quoi** : aux valeurs aberrants (conducteur qui s'arrete/ralenti)--> loin de l'estimation. Comment on définit le loin ? (Seuil par rapport à la vitesse max ? Seuil par rapport à 0)
+3. Robuste **a quoi** : aux valeurs aberrants (conducteur qui s'arrete/ralenti)--> loin de l'estimation. Comment on définit le loin ? (Seuil par rapport à la vitesse max ? Seuil par rapport à 0)
 
+4. Comment je le caractérise ? Quel outils ?
+
+      - Borne de Cramer Rao
+      - Vu peut-être lors des prochains TP ?
+
+5. Qu'est ce qu'il se passe si $D \neq D_{estimé}$ ? 

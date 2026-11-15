@@ -18,7 +18,7 @@ D = 4                                # degré du polynôme
 A_MAX_G = 0.3                        # accélération maximale autorisée [g] (voiture normale : 0,1 à 0,3 g)
 COEFS_LIBRES = None                  # None = calcul automatique ; ou une liste [c2, ..., cd] (D-1 valeurs) à la main
 LOI = "normale"                      # loi du bruit
-SIGMA = 15.0                          # écart-type du bruit [km/h]
+SIGMA = 5.0                          # écart-type du bruit [km/h]
 N_POINTS = 1000                       # nombre de points mesurés
 GRAINE = None                        # None = aléatoire à chaque lancement (la graine utilisée est affichée) ; un entier (ex. 42) = toujours les mêmes données
 AFFICHER = True                      # True : ouvre la fenêtre du graphique ; False : sauvegarde seulement
