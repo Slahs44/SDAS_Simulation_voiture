@@ -1,26 +1,8 @@
-"""Projet SDAS : estimation robuste de la vitesse v(x) sur un troncon."""
-from vitesse.basis import LegendreBasis, MonomialBasis, PolynomialBasis
-from vitesse.estimators import Estimator, OLSEstimator
-from vitesse.evaluation import MonteCarlo, MonteCarloResult, cramer_rao_covariance
-from vitesse.noise import (
-    ContaminatedGaussianNoise,
-    GaussianNoise,
-    NoiseModel,
-    VehicleEffectNoise,
-)
-from vitesse.profile import SpeedProfile
-from vitesse.simulator import (
-    ClusteredPositionSampler,
-    Measurements,
-    MeasurementSimulator,
-    PositionSampler,
-    UniformPositionSampler,
-)
+"""Projet SDAS : simulation de la vitesse v(x) d'un véhicule sur un tronçon.
 
-__all__ = [
-    "ClusteredPositionSampler", "ContaminatedGaussianNoise", "Estimator",
-    "GaussianNoise", "LegendreBasis", "MeasurementSimulator", "Measurements",
-    "MonomialBasis", "MonteCarlo", "MonteCarloResult", "NoiseModel",
-    "OLSEstimator", "PolynomialBasis", "PositionSampler", "SpeedProfile",
-    "UniformPositionSampler", "VehicleEffectNoise", "cramer_rao_covariance",
-]
+Grâce à ce fichier on peut écrire :  from vitesse import Noise, SpeedPolynomial"""
+from vitesse.measurements import generate_positions, simulate_speeds
+from vitesse.noise import Noise
+from vitesse.polynomial import SpeedPolynomial
+
+__all__ = ["Noise", "SpeedPolynomial", "generate_positions", "simulate_speeds"]

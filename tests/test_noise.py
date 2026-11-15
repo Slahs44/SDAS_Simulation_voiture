@@ -1,49 +1,47 @@
+"""Tests de la classe Noise. Lancer avec :  pytest tests/test_noise.py -v
+
+Principe d'un test : on fait un calcul dont on connaît le résultat, puis `assert` vérifie que le
+code donne bien ce résultat. Si un assert est faux, le test est marqué FAILED."""
 import numpy as np
 import pytest
 
-from vitesse import ContaminatedGaussianNoise, GaussianNoise, VehicleEffectNoise
+from vitesse import Noise
+
+# ----------------------------------------------------------------------
+# 1. PARAMETRES
+# ----------------------------------------------------------------------
+SIGMA = 2.0                          # écart-type du bruit testé [m/s]
+N_TIRAGES = 200_000                  # beaucoup de tirages -> les statistiques sont précises
+GRAINE = 0                           # graine aléatoire (résultats reproductibles)
 
 
-def test_gaussian_statistics():
-    eps = GaussianNoise(2.0).sample(np.random.default_rng(0), 200_000)
-    assert abs(eps.mean()) < 0.02
-    assert eps.std() == pytest.approx(2.0, rel=0.01)
+def test_sample_returns_n_values():
+    bruit = Noise("normale", SIGMA, np.random.default_rng(GRAINE))
+    assert len(bruit.sample(50)) == 50
 
 
-def test_gaussian_reproducible_with_seed():
-    a = GaussianNoise(1.0).sample(np.random.default_rng(7), 10)
-    b = GaussianNoise(1.0).sample(np.random.default_rng(7), 10)
-    np.testing.assert_array_equal(a, b)
+def test_normal_noise_has_mean_zero_and_std_sigma():
+    valeurs = Noise("normale", SIGMA, np.random.default_rng(GRAINE)).sample(N_TIRAGES)
+    assert abs(valeurs.mean()) < 0.02                       # moyenne proche de 0
+    assert valeurs.std() == pytest.approx(SIGMA, rel=0.01)  # écart-type proche de SIGMA (à 1 % près)
 
 
-def test_zero_sigma_gives_zero_noise():
-    np.testing.assert_array_equal(GaussianNoise(0.0).sample(np.random.default_rng(0), 5), 0.0)
+def test_same_seed_gives_same_values():
+    a = Noise("normale", SIGMA, np.random.default_rng(7)).sample(10)
+    b = Noise("normale", SIGMA, np.random.default_rng(7)).sample(10)
+    np.testing.assert_array_equal(a, b)                     # exactement les mêmes nombres
 
 
-def test_negative_sigma_rejected():
+def test_zero_sigma_gives_no_noise():
+    valeurs = Noise("normale", 0.0, np.random.default_rng(GRAINE)).sample(5)
+    np.testing.assert_array_equal(valeurs, 0.0)
+
+
+def test_unknown_law_is_rejected():
+    with pytest.raises(ValueError):          # on s'attend à ce que le code lève une erreur
+        Noise("loi_qui_nexiste_pas", SIGMA)
+
+
+def test_negative_sigma_is_rejected():
     with pytest.raises(ValueError):
-        GaussianNoise(-1.0)
-
-
-def test_contaminated_variance_is_mixture():
-    n = ContaminatedGaussianNoise(sigma=1.0, outlier_rate=0.1, outlier_sigma=10.0)
-    eps = n.sample(np.random.default_rng(1), 500_000)
-    expected_var = 0.9 * 1.0**2 + 0.1 * 10.0**2
-    assert eps.var() == pytest.approx(expected_var, rel=0.03)
-
-
-def test_contaminated_invalid_rate():
-    with pytest.raises(ValueError):
-        ContaminatedGaussianNoise(1.0, 1.5, 5.0)
-
-
-def test_vehicle_effect_is_shared_within_vehicle():
-    ids = np.repeat(np.arange(2000), 2)           # chaque vehicule envoie 2 fois
-    eps = VehicleEffectNoise(sigma=0.1, sigma_vehicle=3.0).sample(np.random.default_rng(2), ids.size, ids)
-    first, second = eps[0::2], eps[1::2]
-    assert np.corrcoef(first, second)[0, 1] > 0.9  # corr theorique ~ 9 / 9.01
-
-
-def test_vehicle_effect_requires_ids():
-    with pytest.raises(ValueError):
-        VehicleEffectNoise(1.0, 1.0).sample(np.random.default_rng(0), 5)
+        Noise("normale", -1.0)

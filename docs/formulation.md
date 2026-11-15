@@ -27,7 +27,7 @@ $$
 ## 3. Ce que je pense faire
 
 1. **Estimateur de base** : moindres carres ordinaires (MCO). C'est le maximum de vraisemblance
-   si le bruit est gaussien i.i.d. ; coefficients $\hat{c} = (A^\top A)^{-1} A^\top v$ (calcul par `lstsq`).
+   si le bruit est gaussien i.i.d.
 2. **Caracterisation** : biais, covariance, RMSE de $\hat{v}(x)$ par Monte-Carlo ; comparaison a la
    borne de Cramer-Rao; sensibilite a $\sigma$, $N$, $d$, au conditionnement (base de Legendre).
 3. **Cas difficile** : montrer ou le MCO casse (aberrants, correlation, mauvais degre), puis proposer des estimateurs robustes (Huber, moindres carres ponderes iteres, RANSAC, mediane, ...) et les comparer au MCO par les memes experiences. (Proposition IA)

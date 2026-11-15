@@ -1,63 +1,58 @@
-"""Modeles de bruit. Chacun tire un vecteur de perturbations de taille n."""
-from __future__ import annotations
+"""
+noise.py - Le bruit aléatoire
+=============================
 
-from abc import ABC, abstractmethod
+Le bruit représente tout ce qui fait que la vitesse MESURÉE n'est pas exactement la vraie vitesse :
 
+        vitesse mesurée = vraie vitesse + bruit
+
+La classe `Noise` sait tirer n valeurs de bruit selon une LOI que l'on choisit.
+Pour l'instant une seule loi existe : la loi normale (« gaussienne », la courbe en cloche).
+
+Pour ajouter une loi plus tard (par exemple "uniforme") il y a 2 endroits à modifier :
+  1) la liste LOIS_DISPONIBLES juste en dessous : y ajouter le nom de la loi ;
+  2) la méthode `sample` : y ajouter un bloc `elif self.law == "uniforme": ...`
+"""
 import numpy as np
 
-
-class NoiseModel(ABC):
-    @abstractmethod
-    def sample(self, rng: np.random.Generator, n: int,
-               vehicle_ids: np.ndarray | None = None) -> np.ndarray:
-        """Tire n perturbations. `vehicle_ids` sert aux bruits correles par vehicule."""
+# Les lois que la classe connaît. Pour en ajouter une : ajouter son nom ici ET un `elif` dans `sample`.
+LOIS_DISPONIBLES = ("normale",)
 
 
-class GaussianNoise(NoiseModel):
-    """Cas simple : eps_k ~ N(0, sigma^2) i.i.d."""
+class Noise:
+    """Un générateur de bruit.
 
-    def __init__(self, sigma: float) -> None:
+    Exemple d'utilisation :
+        rng = np.random.default_rng(42)                 # le générateur aléatoire (voir plus bas)
+        bruit = Noise(law="normale", sigma=2.0, rng=rng)
+        valeurs = bruit.sample(100)                     # 100 valeurs de bruit
+    """
+
+    def __init__(self, law="normale", sigma=1.0, rng=None):
+        """Le constructeur : appelé automatiquement quand on écrit Noise(...).
+
+        law   : nom de la loi (pour l'instant uniquement "normale").
+        sigma : « force » du bruit. Pour la loi normale c'est l'écart-type : environ 68 % des valeurs
+                tombent entre -sigma et +sigma, et 95 % entre -2·sigma et +2·sigma.
+        rng   : le générateur de nombres aléatoires. On le crée une seule fois dans le programme
+                avec np.random.default_rng(graine) ; avec la même graine on obtient les mêmes
+                nombres à chaque lancement (résultats reproductibles).
+        """
+        if law not in LOIS_DISPONIBLES:
+            raise ValueError(f"loi inconnue : '{law}'. Lois disponibles : {LOIS_DISPONIBLES}")
         if sigma < 0:
-            raise ValueError("sigma doit etre >= 0")
-        self.sigma = float(sigma)
+            raise ValueError("sigma doit être positif ou nul")
 
-    def sample(self, rng, n, vehicle_ids=None):
-        return self.sigma * rng.standard_normal(n)
+        # On range les paramètres dans l'objet (self) pour que les autres méthodes puissent les utiliser.
+        self.law = law
+        self.sigma = sigma
+        self.rng = rng if rng is not None else np.random.default_rng()
 
+    def sample(self, n):
+        """Tire n valeurs de bruit selon la loi choisie et les renvoie dans un tableau numpy."""
+        if self.law == "normale":
+            # Loi normale de moyenne 0 et d'écart-type sigma
+            return self.rng.normal(0.0, self.sigma, n)
 
-class ContaminatedGaussianNoise(NoiseModel):
-    """Cas difficile (aberrants) : N(0, sigma^2) avec proba 1-p,
-    N(0, outlier_sigma^2) avec proba p (arrets, bouchons, erreurs capteur)."""
-
-    def __init__(self, sigma: float, outlier_rate: float, outlier_sigma: float) -> None:
-        if not 0.0 <= outlier_rate <= 1.0:
-            raise ValueError("outlier_rate doit etre dans [0, 1]")
-        if sigma < 0 or outlier_sigma < 0:
-            raise ValueError("les ecarts-types doivent etre >= 0")
-        self.sigma = float(sigma)
-        self.outlier_rate = float(outlier_rate)
-        self.outlier_sigma = float(outlier_sigma)
-
-    def sample(self, rng, n, vehicle_ids=None):
-        is_outlier = rng.random(n) < self.outlier_rate
-        scale = np.where(is_outlier, self.outlier_sigma, self.sigma)
-        return scale * rng.standard_normal(n)
-
-
-class VehicleEffectNoise(NoiseModel):
-    """Cas difficile (correlation) : eps = b_vehicule + e_k, b ~ N(0, sigma_v^2) commun
-    a tous les envois d'un meme vehicule (style de conduite), e_k ~ N(0, sigma^2)."""
-
-    def __init__(self, sigma: float, sigma_vehicle: float) -> None:
-        if sigma < 0 or sigma_vehicle < 0:
-            raise ValueError("les ecarts-types doivent etre >= 0")
-        self.sigma = float(sigma)
-        self.sigma_vehicle = float(sigma_vehicle)
-
-    def sample(self, rng, n, vehicle_ids=None):
-        if vehicle_ids is None:
-            raise ValueError("VehicleEffectNoise necessite vehicle_ids")
-        ids = np.asarray(vehicle_ids)
-        _, inverse = np.unique(ids, return_inverse=True)
-        offsets = self.sigma_vehicle * rng.standard_normal(inverse.max() + 1)
-        return offsets[inverse] + self.sigma * rng.standard_normal(n)
+        # (Ici on ajoutera plus tard : elif self.law == "uniforme": return ...)
+        raise ValueError(f"loi non implémentée : {self.law}")
