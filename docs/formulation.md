@@ -18,56 +18,29 @@ v_k = v(x_k) + \varepsilon_k, \qquad k = 1, \dots, N
 $$
 
 - **Cas simple** : $\varepsilon_k \sim \mathcal{N}(0, \sigma^2)$ i.i.d., positions $x_k$ uniformes sur $[0, L]$.
-- **Cas difficile** (a preciser avec le professeur) : valeurs aberrantes, bruit correle par vehicule,
-  variance dependant de $x$, trou de couverture des positions, mauvais degre.
+- **Cas difficile** (a preciser avec le professeur) : 
+   - valeurs aberrantes --> crée automatiquement par la génération ?
+   - Variance différente par capteur ? Pour chaque point : Génération aléatoire d'une variance --> puis d'un point suivant la loi de proba choisi (et défini par sa variance)
+   - Si plusieurs virage --> décéleration puis réaccélération ? Si oui possible correlation avec d et nb virage ? Pour ca voir TP1/2
+
 
 ## 3. Ce que je pense faire
 
 1. **Estimateur de base** : moindres carres ordinaires (MCO). C'est le maximum de vraisemblance
    si le bruit est gaussien i.i.d. ; coefficients $\hat{c} = (A^\top A)^{-1} A^\top v$ (calcul par `lstsq`).
 2. **Caracterisation** : biais, covariance, RMSE de $\hat{v}(x)$ par Monte-Carlo ; comparaison a la
-   borne de Cramer-Rao $\sigma^2 (A^\top A)^{-1}$ ; sensibilite a $\sigma$, $N$, $d$, au conditionnement (base de Legendre).
-3. **Cas difficile** : montrer ou le MCO casse (aberrants, correlation, trou de couverture,
-   mauvais degre), puis proposer des estimateurs robustes (Huber, moindres carres ponderes iteres,
-   RANSAC, mediane, ...) et les comparer au MCO par les memes experiences.
-4. **Illustration** : tracer $\hat{v}(x)$ avec bande de confiance sur des exemples simules.
+   borne de Cramer-Rao; sensibilite a $\sigma$, $N$, $d$, au conditionnement (base de Legendre).
+3. **Cas difficile** : montrer ou le MCO casse (aberrants, correlation, mauvais degre), puis proposer des estimateurs robustes (Huber, moindres carres ponderes iteres, RANSAC, mediane, ...) et les comparer au MCO par les memes experiences. (Proposition IA)
+4. **Illustration** : tracer $\hat{v}(x)$ avec bande de confiance sur des exemples simules. J'aimerai reussir à relier les min de mes barres d'erreurs et max entre eux comme sur les carnets de santé pour la taille/poids.
 
-Resultats actuels ($d = 2$, $\sigma = 2$ m/s, $N = 100$, $M = 70$, 1000 tirages Monte-Carlo) :
-
-| Scenario                                   | RMSE globale sur $v(x)$ |
-|--------------------------------------------|-------------------------|
-| Reference (gaussien, $d$ correct)          | 0,36 m/s                |
-| Sous-ajuste ($d = 1$)                      | 2,46 m/s (biais 5,4)    |
-| Sur-ajuste ($d = 5$)                       | 0,52 m/s                |
-| 10 % d'aberrants ($\times 10\,\sigma$)     | 1,16 m/s                |
-| Effet vehicule ($\sigma_v = 3$)            | 0,68 m/s                |
-| Points sur 0-50 % du troncon               | 2,28 m/s                |
-
-En gaussien, l'ecart-type empirique des coefficients coincide avec la borne de Cramer-Rao (MCO efficace).
 
 ## 4. Points bloquants / questions pour lundi
 
-**Sur le sens de la grandeur estimee**
-1. $v(x)$ est-elle la **moyenne de la population de vehicules en $x$** ? Dans ce cas, l'ecart d'un vehicule
-   a $v(x)$ (style de conduite) fait-il partie du « bruit » ? C'est ce qui decide entre bruit i.i.d.
-   et bruit correle par vehicule (un vehicule qui envoie 2 fois).
-2. « Vitesse moyenne » : moyenne spatiale ou temporelle (moyenne harmonique) ? Veut-on le profil $v(x)$
-   ou aussi un scalaire (moyenne de $v$ sur le troncon) ?
-
 **Sur la simulation**
-3. Que signifie « difficile » pour les donnees : aberrants (arrets, bouchons), bruit a queue lourde,
-   variance dependant de $x$, bruit sur $x$ (GPS), ou plusieurs de ces effets ?
-4. Les positions sont-elles aleatoires uniformes ou imposees (plan d'experience) ? Le nombre
-   d'envois par vehicule suit-il une loi precise ?
-5. $\sigma$ est-il connu ou a estimer ? Le bruit est-il gaussien dans le cas simple *et* centre ?
+1. Les positions sont-elles aleatoires uniformes ou imposees (plan d'experience) ? Le nombre
+   d'envois par vehicule suit-il une loi precise ? Un véhicule peut envoyer plusieurs valeurs ? A intervalle de distance régulière ? 
 
 **Sur la robustesse et la caracterisation**
-6. Robuste **a quoi** : aberrants, mauvaise loi de bruit, mauvais degre $d$ ? Quels outils attend-on
-   (point de rupture, fonction d'influence, efficacite relative) ?
-7. Quel critere de performance : RMSE integree sur le troncon, erreur max (norme sup), erreur aux extremites
-   (la variance est maximale aux bords) ?
-8. Comment traiter le choix de $d$ s'il est connu « au moment du calcul » : doit-on aussi proposer un
-   critere de selection (AIC/BIC, validation croisee) ou rester a $d$ fixe ?
 
-**Sur la forme du livrable**
-9. Format attendu du rapport et de la soutenance ; place du code (depot GitHub partage ?).
+2. Robuste **a quoi** : aux valeurs aberrants (conducteur qui s'arrete/ralenti)--> loin de l'estimation. Comment on définit le loin ? (Seuil par rapport à la vitesse max ? Seuil par rapport à 0)
+
