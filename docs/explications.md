@@ -4,7 +4,7 @@ Ce document explique, avec les valeurs par défaut de `main_03_simulation.py`
 ($L = 2000$ m, $V_0 = 70$ km/h, $V_L = 80$ km/h, limite 90 km/h, degré $d = 2$, bruit $\sigma = 5$ km/h, 100 points).
 
 ## 0. Vue d'ensemble
-
+ 
 ### Modélisation du problème
 
 On considère $N$ véhicules indicés par $i \in \{1, \dots, N\}$. Chaque véhicule envoie **un seul point** : les $N$ points
@@ -243,7 +243,7 @@ rng = np.random.default_rng(42)      # on commence à la « page » 42
 ---
 
 ## 4. Générer au hasard SANS graine… et la retrouver à la fin
-
+ 
 C'est possible, et c'est ce que font `main_02` et `main_03` quand `GRAINE = None` (valeur par défaut).
 
 | Paramètre | Comportement |
