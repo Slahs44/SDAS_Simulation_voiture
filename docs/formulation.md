@@ -38,6 +38,7 @@ $$
 
 5. Est ce qu'on travail avec des vecteurs du coup ? Donc "BCR dans le cas vectoriel" ? 
 
+
 **Sur la robustesse et la caracterisation**
 
 1. Robuste **a quoi** : aux valeurs aberrants (conducteur qui s'arrete/ralenti)--> loin de l'estimation. Comment on définit le loin ? (Seuil par rapport à la vitesse max ? Seuil par rapport à 0)
@@ -46,6 +47,7 @@ $$
 
       - Borne de Cramer Rao
       - Vu peut-être lors des prochains TP ?
+      - Estimation Baisienne ?
 
 3. Qu'est ce qu'il se passe si $D \neq D_{estimé}$ ? 
 
