@@ -28,7 +28,9 @@ $$
 
 **Sur la simulation**
 1. Les positions sont-elles aleatoires uniformes ou imposees (plan d'experience) ? Le nombre
-   d'envois par vehicule suit-il une loi precise ? Un véhicule peut envoyer plusieurs valeurs ? A intervalle de distance régulière ? 
+   d'envois par vehicule suit-il une loi precise ? Un véhicule peut envoyer plusieurs valeurs ?(Si oui : A intervalle de distance régulière ? Un véhicule lent envoie plus de position qu'un rapide ?)
+   
+   - On veut des tirage indépendant donc on choisit d'avoir un unique point par véhicule sur un tronçon.
 
 2. Est ce que en générant avec RNG mais avec une meme graine une loi uniforme et la loi normale, $x_k$ devient corrélé à $\epsilon_k$ ?
 
@@ -37,6 +39,8 @@ $$
 4. Différente variance sur les véhicules : de position et vitesse ? que vitesse ?
 
 5. Est ce qu'on travail avec des vecteurs du coup ? Donc "BCR dans le cas vectoriel" ? 
+
+6. Est ce que la variance cache en réalité la précision du capteur + le style de conduite différent ? Est ce que l'un est majoritaire sur l'autre ? Est ce qu'on considère qu'on en prend qu'un seul en compte
 
 
 **Sur la robustesse et la caracterisation**
