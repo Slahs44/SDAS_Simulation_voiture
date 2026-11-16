@@ -241,7 +241,7 @@ rng = np.random.default_rng(42)      # on commence à la « page » 42
 ---
 
 ## 4. Générer au hasard SANS graine… et la retrouver à la fin
-
+ 
 C'est possible, et c'est ce que font `main_02` et `main_03` quand `GRAINE = None` (valeur par défaut).
 
 | Paramètre | Comportement |
