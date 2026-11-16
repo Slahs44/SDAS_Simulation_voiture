@@ -5,14 +5,61 @@ Ce document explique, avec les valeurs par défaut de `main_03_simulation.py`
 
 ## 0. Vue d'ensemble
 
-```
-        polynôme v(x)  ───────────────┐
-   (la VRAIE vitesse, sans bruit)      │
-                                       ├──►  v_k = v(x_k) + ε_k   ──►  les 100 points (x_k, v_k)
-   positions x_k  (loi UNIFORME) ──────┤                                (ce que le système reçoit)
-                                       │
-   bruit ε_k      (loi NORMALE) ───────┘
-```
+### Modélisation du problème
+
+On considère plusieurs véhicules indicés par $i$, et pour chacun $N$ tirages indicés par $j \in \{1, \dots, N\}$.
+
+- $P$ est le polynôme de vitesse : la **vraie** vitesse en fonction de la position, sans bruit (section 1).
+- $\sigma_i$ est l'écart-type du bruit propre au véhicule $i$ ($\sigma_i^2$ est sa variance), tiré aléatoirement selon une loi normale bornée à $[\alpha_1, \alpha_2]$ (voir ci-dessous).
+- $x_{ij}$ est la position du véhicule $i$ issue du tirage $j$ sur $N$.
+- $v_{ij}$ est la vitesse mesurée du véhicule $i$ issue du tirage $j$ sur $N$ :
+
+$$
+v_{ij} = P(x_{ij}) + b_{ij},
+\qquad
+b_{ij} \sim \mathcal{N}\left(0,\ \sigma_{i}^2\right)
+$$
+
+### Tirage de l'écart-type $\sigma_i$
+
+On se donne deux bornes $0 < \alpha_1 < \alpha_2$ pour l'écart-type des véhicules. On veut que 99,7 % des tirages
+tombent entre $\alpha_1$ et $\alpha_2$, c'est-à-dire que $[\alpha_1, \alpha_2]$ soit l'intervalle $[\mu - 3s,\ \mu + 3s]$
+d'une loi normale de moyenne $\mu$ et d'écart-type $s$ :
+
+$$
+\mu = \frac{\alpha_1 + \alpha_2}{2},
+\qquad
+s = \frac{\alpha_2 - \alpha_1}{6},
+\qquad
+S_i \sim \mathcal{N}\left(\mu,\ s^2\right)
+$$
+
+Il reste 0,3 % des tirages en dehors de $[\alpha_1, \alpha_2]$ (environ 0,15 % de chaque côté). On les ramène sur la borne
+la plus proche :
+
+$$
+\sigma_i = \min\left(\max\left(S_i,\ \alpha_1\right),\ \alpha_2\right)
+=
+\begin{cases}
+\alpha_1 & \text{si } S_i < \alpha_1 \\
+S_i & \text{si } \alpha_1 \le S_i \le \alpha_2 \\
+\alpha_2 & \text{si } S_i > \alpha_2
+\end{cases}
+$$
+
+On a donc toujours $\sigma_i \in [\alpha_1, \alpha_2]$. En particulier $\sigma_i > 0$ dès que $\alpha_1 > 0$, ce qui garantit
+un écart-type valide. Conséquence : $\sigma_i$ vaut exactement $\alpha_1$ (ou exactement $\alpha_2$) avec une probabilité
+d'environ 0,13 %.
+
+### Schéma
+
+$$
+\begin{array}{lcl}
+P(x) \ \text{(vraie vitesse, sans bruit)} & \searrow & \\[6pt]
+x_{ij} \sim \mathcal{U}\left([0, L]\right) & \longrightarrow & v_{ij} = P(x_{ij}) + b_{ij} \ \longrightarrow\ \left(x_{ij}, v_{ij}\right)_{i,\,j} \ \text{(ce que le système reçoit)} \\[6pt]
+b_{ij} \sim \mathcal{N}\left(0, \sigma_i^2\right),\ \ \sigma_i \in [\alpha_1, \alpha_2] & \nearrow &
+\end{array}
+$$
 
 Un seul « générateur aléatoire » (`rng`) fournit tous les nombres au hasard : d'abord les 100 positions,
 ensuite les 100 valeurs de bruit. Ce générateur est entièrement déterminé par un nombre : **la graine** (section 3).
