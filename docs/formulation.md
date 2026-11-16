@@ -32,13 +32,29 @@ $$
 
 2. Est ce que en générant avec RNG mais avec une meme graine une loi uniforme et la loi normale, $x_k$ devient corrélé à $\epsilon_k$ ?
 
+3. Est ce que je génère la position $x$ avec une loi uniforme ou je prends une répartition linéaire sur $[0,L]$ ?
+
+4. Différente variance sur les véhicules : de position et vitesse ? que vitesse ?
+
+5. Est ce qu'on travail avec des vecteurs du coup ? Donc "BCR dans le cas vectoriel" ? 
+
 **Sur la robustesse et la caracterisation**
 
-3. Robuste **a quoi** : aux valeurs aberrants (conducteur qui s'arrete/ralenti)--> loin de l'estimation. Comment on définit le loin ? (Seuil par rapport à la vitesse max ? Seuil par rapport à 0)
+1. Robuste **a quoi** : aux valeurs aberrants (conducteur qui s'arrete/ralenti)--> loin de l'estimation. Comment on définit le loin ? (Seuil par rapport à la vitesse max ? Seuil par rapport à 0)
 
-4. Comment je le caractérise ? Quel outils ?
+2. Comment je le caractérise ? Quel outils ?
 
       - Borne de Cramer Rao
       - Vu peut-être lors des prochains TP ?
 
-5. Qu'est ce qu'il se passe si $D \neq D_{estimé}$ ? 
+3. Qu'est ce qu'il se passe si $D \neq D_{estimé}$ ? 
+
+
+
+## 4. A Faire
+**A faire  durant la séance Lundi 16/11
+ 1. Répondre question comment caractériser. Voir les TP et cours pour trouver un/des methode(s).
+ 
+ 2. Différente variance sur les véhicules (car précision capteur différente)
+
+ **A faire pour la prochaine séance
