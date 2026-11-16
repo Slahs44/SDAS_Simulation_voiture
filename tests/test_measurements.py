@@ -10,7 +10,8 @@ from vitesse import Noise, SpeedPolynomial, create_rng, generate_positions, simu
 LONGUEUR = 2000.0                    # longueur du tronçon [m]
 V0, VL = 70.0, 80.0                  # vitesses de début et de fin [km/h]
 D, COEFS_LIBRES = 2, [-58.0]         # degré et coefficients libres du polynôme
-SIGMA = 5.0                          # écart-type du bruit [km/h]
+SIGMA = 5.0                          # écart-type du bruit (cas sigma fixe) [km/h]
+ALPHA1, ALPHA2 = 2.0, 8.0            # plage des sigma_i (un écart-type par voiture) [km/h]
 N_POINTS = 100                       # nombre de points simulés
 GRAINE = 0                           # graine aléatoire
 GRAINE_EXEMPLE = 42                  # graine de l'exemple « reproductible »
@@ -38,6 +39,16 @@ def test_noise_is_centered_around_true_speed():
     ecart = simulate_speeds(poly, Noise("normale", SIGMA, rng), x) - poly.speed(x)
     assert abs(ecart.mean()) < 0.05                          # écart moyen ≈ 0
     assert ecart.std() == pytest.approx(SIGMA, rel=0.02)     # dispersion ≈ SIGMA
+
+
+def test_variable_sigma_noise_is_centered_around_true_speed():
+    rng = np.random.default_rng(GRAINE)
+    poly = SpeedPolynomial(LONGUEUR, V0, VL, D, COEFS_LIBRES)
+    x = generate_positions(100_000, LONGUEUR, rng)
+    bruit = Noise("normale", rng=rng, sigma_range=(ALPHA1, ALPHA2))
+    ecart = simulate_speeds(poly, bruit, x) - poly.speed(x)
+    assert abs(ecart.mean()) < 0.05                                              # écart moyen ≈ 0
+    assert ecart.std() == pytest.approx(np.sqrt(np.mean(bruit.last_sigmas ** 2)), rel=0.02)   # ≈ racine(moy. sigma_i²)
 
 
 # ----------------------------- la graine -----------------------------

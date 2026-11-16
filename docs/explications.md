@@ -1,7 +1,9 @@
 # Explication : comment les données simulées sont générées
 
-Ce document explique, avec les valeurs par défaut de `main_03_simulation.py`
-($L = 2000$ m, $V_0 = 70$ km/h, $V_L = 80$ km/h, limite 90 km/h, degré $d = 2$, bruit $\sigma = 5$ km/h, 100 points).
+Ce document explique la génération sur un petit exemple : $L = 2000$ m, $V_0 = 70$ km/h, $V_L = 80$ km/h,
+limite 90 km/h, degré $d = 2$, écarts-types $\sigma_i \in [\alpha_1, \alpha_2] = [2, 8]$ km/h, 100 points (= 100 voitures).
+(Les valeurs par défaut de `main_03_simulation.py` sont différentes : $L = 1500$ m, $V_0 = 40$, $V_L = 35$ km/h,
+$d = 4$, 1000 points ; même plage $[2, 8]$ km/h.)
 
 ## 0. Vue d'ensemble
  
@@ -54,6 +56,21 @@ exactement $\alpha_1$ (ou exactement $\alpha_2$) avec une probabilité d'environ
 
 > **Dans le code** : `Noise("normale", sigma_range=(alpha1, alpha2))`, détails en section 2.
 
+Exemple avec $\alpha_1 = 2$ et $\alpha_2 = 8$ km/h : $\mu = 5$ km/h et $s = 1$ km/h.
+
+Dans le code (`Noise("normale", rng=rng, sigma_range=(alpha1, alpha2))`) :
+
+```python
+sigmas = np.clip(rng.normal(moyenne, ecart_type, n), alpha1, alpha2)   # Noise.sample_sigmas : un sigma_i par voiture
+bruit = rng.normal(0.0, sigmas)                                        # Noise.sample : b_i ~ N(0, sigma_i²)
+```
+
+Les $\sigma_i$ tirés sont gardés dans `bruit.last_sigmas`. `python tests/mains/main_02_bruit.py` trace leur
+histogramme et celui du bruit obtenu ; `python src/vitesse/noise.py` vérifie les chiffres sur 100 000 voitures.
+
+Cas particulier : `Noise("normale", sigma=5.0)` (sans `sigma_range`) donne le même $\sigma$ à toutes les voitures.
+Ce cas simple sert de référence et pour les tests (par exemple $\sigma = 0$ : pas de bruit).
+
 ### Schéma
 
 $$
@@ -65,7 +82,8 @@ b_i \sim \mathcal{N}\left(0, \sigma_i^2\right),\ \ \sigma_i \in [\alpha_1, \alph
 $$
 
 Un seul « générateur aléatoire » (`rng`) fournit tous les nombres au hasard : d'abord les 100 positions,
-ensuite les 100 valeurs de bruit. Ce générateur est entièrement déterminé par un nombre : **la graine** (section 3).
+ensuite les 100 écarts-types $\sigma_i$, enfin les 100 valeurs de bruit. Ce générateur est entièrement déterminé
+par un nombre : **la graine** (section 3).
 
 ---
 
@@ -153,38 +171,27 @@ beaucoup de points et d'autres avec peu.
 
 $$v(x_k) = c_0 + c_1 \xi_k + c_2 \xi_k^2, \qquad \xi_k = x_k / L$$
 
-**Étape 3 — le bruit $\varepsilon_k$ : loi normale centrée, d'écart-type $\sigma$**
-
-```python
-bruit = rng.normal(0.0, sigma, n)            # Noise.sample, loi "normale"
-```
-
-$\varepsilon_k \sim \mathcal{N}(0, \sigma^2)$. Avec $\sigma = 5$ km/h : environ 68 % des points s'écartent de la
-vraie courbe de moins de 5 km/h, et 95 % de moins de 10 km/h. ($\sigma$ est l'**écart-type** ; la variance vaut $\sigma^2$.)
-
-**Variante — un écart-type $\sigma_i$ par voiture** (`Noise("normale", sigma_range=(alpha1, alpha2))`)
-
-On suppose un point par voiture, donc des points indépendants, et chaque voiture a son propre capteur, plus ou
-moins précis. Pour chaque point $i$ (formules complètes en section 0, « Tirage de l'écart-type $\sigma_i$ ») :
-
-1. on tire $S_i \sim \mathcal{N}(\mu, s^2)$ avec $\mu = \frac{\alpha_1 + \alpha_2}{2}$ et $s = \frac{\alpha_2 - \alpha_1}{6}$
-   (règle des 3 sigma : 99,7 % des valeurs entre $\alpha_1$ et $\alpha_2$) ;
-2. les rares valeurs (environ 0,3 %) qui sortent de $[\alpha_1, \alpha_2]$ sont ramenées à la borne la plus proche :
-   $\sigma_i = \min(\max(S_i, \alpha_1), \alpha_2)$ ;
-3. on tire le bruit du point : $\varepsilon_i \sim \mathcal{N}(0, \sigma_i^2)$ (noté $b_i$ en section 0).
+**Étape 3 — l'écart-type $\sigma_k$ de la voiture $k$** (détails en section 0)
 
 ```python
 sigmas = np.clip(rng.normal(moyenne, ecart_type, n), alpha1, alpha2)   # Noise.sample_sigmas
-bruit = rng.normal(0.0, sigmas)                                        # Noise.sample
 ```
 
-Exemple avec $\alpha_1 = 2$ et $\alpha_2 = 8$ km/h : $\mu = 5$ km/h et $s = 1$ km/h. Les $\sigma_i$ tirés sont
-dans `bruit.last_sigmas`, et `python src/vitesse/noise.py` vérifie ces chiffres sur 100 000 voitures.
+Chaque voiture a son propre capteur, plus ou moins précis : $\sigma_k$ est tiré selon $\mathcal{N}(\mu, s^2)$ avec
+$\mu = 5$ km/h et $s = 1$ km/h (pour $[\alpha_1, \alpha_2] = [2, 8]$), puis ramené dans $[2, 8]$ s'il en sort.
+Les $\sigma_k$ tirés sont dans `bruit.last_sigmas`, et `python src/vitesse/noise.py` vérifie ces chiffres sur 100 000 voitures.
 
-À savoir : le maximum de vraisemblance suppose un seul $\sigma$ pour tous les points. Avec des $\sigma_i$ variables il
-fonctionne quand même, mais le $\hat\sigma$ estimé est une sorte de moyenne : $\hat\sigma^2 \approx$ moyenne des $\sigma_i^2$.
+**Étape 4 — le bruit $\varepsilon_k$ : loi normale centrée, d'écart-type $\sigma_k$**
 
-**Étape 4 — la vitesse mesurée**
+```python
+bruit = rng.normal(0.0, sigmas)              # Noise.sample, loi "normale"
+```
+
+$\varepsilon_k \sim \mathcal{N}(0, \sigma_k^2)$. Pour une voiture avec $\sigma_k = 5$ km/h, il y a environ 68 % de chances
+que sa mesure s'écarte de la vraie courbe de moins de 5 km/h, et 95 % de moins de 10 km/h.
+($\sigma_k$ est l'**écart-type** ; la variance vaut $\sigma_k^2$.)
+
+**Étape 5 — la vitesse mesurée**
 
 $$v_k = v(x_k) + \varepsilon_k$$
 
@@ -194,17 +201,18 @@ return polynomial.speed(x) + noise.sample(len(x))     # simulate_speeds
 
 ### Exemple avec la graine 42 (les 3 premiers points)
 
-| $k$ | $x_k$ (m) | $\xi_k$ | $v(x_k)$ vraie | $\varepsilon_k$ | $v_k$ mesurée |
-|---|---|---|---|---|---|
-| 1 | 1547,9 | 0,7740 | 87,94 | +2,00 | **89,94** |
-| 2 | 877,8 | 0,4389 | 88,74 | −4,53 | **84,22** |
-| 3 | 1717,2 | 0,8586 | 85,66 | −1,89 | **83,77** |
+| $k$ | $x_k$ (m) | $\xi_k$ | $v(x_k)$ vraie | $\sigma_k$ | $\varepsilon_k$ | $v_k$ mesurée |
+|---|---|---|---|---|---|---|
+| 1 | 1547,9 | 0,7740 | 87,94 | 5,40 | −0,03 | **87,91** |
+| 2 | 877,8 | 0,4389 | 88,74 | 4,09 | −0,67 | **88,07** |
+| 3 | 1717,2 | 0,8586 | 85,66 | 4,62 | +1,56 | **87,22** |
 
 Les points $(x_k, v_k)$ sont ce que « reçoit » le système ; la vraie courbe $v(x)$ est ce qu'on cherchera à retrouver.
+Les $\sigma_k$, eux, ne sont **pas** connus du système : il ne voit que les vitesses mesurées.
 
-> **Ordre des tirages.** Les 100 positions sont tirées d'abord, puis les 100 valeurs de bruit : le générateur
-> `rng` fournit ses nombres les uns après les autres, comme on pioche dans un paquet de cartes.
-> Le bruit du point 1 est donc le 1er nombre du *deuxième* lot, pas le 1er nombre du programme.
+> **Ordre des tirages.** Les 100 positions sont tirées d'abord, puis les 100 écarts-types $\sigma_k$, puis les
+> 100 valeurs de bruit : le générateur `rng` fournit ses nombres les uns après les autres, comme on pioche dans
+> un paquet de cartes. Le bruit du point 1 est donc le 1er nombre du *troisième* lot, pas le 1er nombre du programme.
 
 ---
 
@@ -236,7 +244,7 @@ rng = np.random.default_rng(42)      # on commence à la « page » 42
 - On crée **un seul** `rng` par programme et on le passe partout (à `Noise`, à `generate_positions`).
   Si on créait deux générateurs avec la même graine, les positions et le bruit utiliseraient les mêmes nombres
   de départ : ils ne seraient plus indépendants.
-- Pour retrouver **les mêmes données** il faut aussi **les mêmes paramètres** (`N_POINTS`, `SIGMA`, ...) et
+- Pour retrouver **les mêmes données** il faut aussi **les mêmes paramètres** (`N_POINTS`, `ALPHA1`, `ALPHA2`, ...) et
   le même code : changer `N_POINTS`, par exemple, change quels nombres servent à quoi. Une version
   différente de numpy peut aussi, en théorie, produire une autre suite.
 
@@ -466,7 +474,7 @@ petites.
 - **Bruit non gaussien** (autre loi, valeurs aberrantes) : la formule de 5.2 n'est plus la bonne vraisemblance,
   et les moindres carrés deviennent sensibles aux points aberrants (le TP2, section 2, traite le cas Poisson
   avec un algorithme itératif).
-- **$\sigma_i$ variable par voiture** (section 2, variante) : le modèle suppose un seul $\sigma$. L'estimation
+- **$\sigma_i$ variable par voiture** (section 2, étape 3) : le modèle suppose un seul $\sigma$. L'estimation
   des coefficients reste sans biais, mais $\hat\sigma^2$ estime en fait la moyenne des $\sigma_i^2$, et la BCR
   $\sigma^2 \mathbf M^{-1}$ n'est plus exacte.
 - **Mauvais degré** : `main_04` permet de tester `D_ESTIME = D + 1` (le terme en trop est estimé proche de 0
