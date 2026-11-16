@@ -82,3 +82,42 @@ def test_speed_before_fit_is_rejected():
 def test_not_enough_points_is_rejected():
     with pytest.raises(ValueError):
         MaximumLikelihood(LONGUEUR, 3).fit([0.0, 1.0, 2.0], [1.0, 2.0, 3.0])
+
+
+def test_legendre_basis_gives_the_same_curve_as_canonical():
+    # Les deux bases décrivent les mêmes polynômes : l'estimation de la courbe doit être identique.
+    poly, x, v = donnees(N_PEU)
+    can = MaximumLikelihood(LONGUEUR, D, "canonique").fit(x, v)
+    leg = MaximumLikelihood(LONGUEUR, D, "legendre").fit(x, v)
+    xs = np.linspace(0, LONGUEUR, 50)
+    np.testing.assert_allclose(leg.speed(xs), can.speed(xs), atol=1e-8)
+    np.testing.assert_allclose(leg.canonical_coefficients, can.coefficients, atol=1e-8)
+    assert leg.sigma == pytest.approx(can.sigma)
+
+
+def test_legendre_matrix_is_almost_diagonal():
+    # x uniformes sur [0, L] -> t uniformes sur [-1, 1] -> M quasi diagonale (TP2, section 1.4).
+    _, x, v = donnees(N_POINTS)
+    for base, attendu_petit in (("legendre", True), ("canonique", False)):
+        M = MaximumLikelihood(LONGUEUR, D, base).fit(x, v).M
+        corr = M / np.sqrt(np.outer(np.diag(M), np.diag(M)))   # « cosinus » entre colonnes
+        hors_diag = np.abs(corr[~np.eye(D + 1, dtype=bool)]).max()
+        assert (hors_diag < 0.1) == attendu_petit
+
+
+def test_empirical_covariance_matches_the_crb():
+    # Monte-Carlo : NB échantillons aux MEMES positions ; covariance empirique de c_chapeau ≈ sigma² M^-1.
+    rng, _ = create_rng(GRAINE)
+    poly = SpeedPolynomial(LONGUEUR, V0, VL, D, COEFS_LIBRES)
+    x = generate_positions(N_PEU, LONGUEUR, rng)
+    bruit = Noise("normale", SIGMA, rng)
+    estimes = np.array([MaximumLikelihood(LONGUEUR, D).fit(x, simulate_speeds(poly, bruit, x)).coefficients
+                        for _ in range(2000)])
+    bcr = MaximumLikelihood(LONGUEUR, D).fit(x, poly.speed(x) + 1.0).crb(sigma=SIGMA)
+    np.testing.assert_allclose(estimes.mean(axis=0), poly.coefficients, atol=0.5)       # sans biais
+    np.testing.assert_allclose(np.diag(np.cov(estimes.T)), np.diag(bcr), rtol=0.1)      # atteint la BCR
+
+
+def test_unknown_basis_is_rejected():
+    with pytest.raises(ValueError):
+        MaximumLikelihood(LONGUEUR, D, "fourier")

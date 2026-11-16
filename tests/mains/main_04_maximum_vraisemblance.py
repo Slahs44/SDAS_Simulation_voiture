@@ -20,7 +20,7 @@ COEFS_LIBRES = None                     # None = calcul automatique ; ou une lis
 SIGMA = 5.0                             # écart-type du bruit [km/h]
 N_POINTS = 1000                          # nombre de points mesurés
 N_SIGMA = 2.0                           # largeur de la bande : ± N_SIGMA · sigma_chapeau (1 -> ~68 % des mesures, 2 -> ~95 %, 3 -> ~99,7 %)
-D_ESTIME = D                            # degré utilisé pour l'estimation (en vrai il est « connu » : = D ; essaie D+1 ou D-1)
+D_ESTIME = D +1                           # degré utilisé pour l'estimation (en vrai il est « connu » : = D ; essaie D+1 ou D-1)
 GRAINE = None                           # None = aléatoire (graine affichée) ; un entier = reproductible
 AFFICHER = True                         # True : ouvre la fenêtre du graphique ; False : sauvegarde seulement
 
