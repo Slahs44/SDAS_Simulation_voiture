@@ -4,7 +4,7 @@ Ce document explique, avec les valeurs par défaut de `main_03_simulation.py`
 ($L = 2000$ m, $V_0 = 70$ km/h, $V_L = 80$ km/h, limite 90 km/h, degré $d = 2$, bruit $\sigma = 5$ km/h, 100 points).
 
 ## 0. Vue d'ensemble
-
+ 
 ### Modélisation du problème
 
 On considère plusieurs véhicules indicés par $i$, et pour chacun $N$ tirages indicés par $j \in \{1, \dots, N\}$.
