@@ -20,7 +20,7 @@ $$
 - **Cas simple** : $\varepsilon_k \sim \mathcal{N}(0, \sigma^2)$ i.i.d., positions $x_k$ uniformes sur $[0, L]$.
 - **Cas difficile** (à préciser avec le professeur) : 
    - Valeurs aberrantes --> créées automatiquement par la génération ?
-   - Variance différente par capteur ? Pour chaque point : génération aléatoire d'une variance --> puis d'un point suivant la loi de probabilité choisie (et définie par sa variance)
+   - Variance différente par capteur : **implémenté** (`Noise(..., sigma_range=(alpha1, alpha2))`). Un point par voiture ; pour chaque point on tire $\sigma_i \sim \mathcal{N}\big(\frac{\alpha_1+\alpha_2}{2}, (\frac{\alpha_2-\alpha_1}{6})^2\big)$ (99,7 % dans $[\alpha_1, \alpha_2]$, les autres ramenés à la borne la plus proche), puis $\varepsilon_i \sim \mathcal{N}(0, \sigma_i^2)$
    - Si plusieurs virages --> décélération puis réaccélération ? Si oui, corrélation possible avec d et le nombre de virages ? Pour ça, voir TP1/2
 
 

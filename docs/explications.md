@@ -159,6 +159,29 @@ bruit = rng.normal(0.0, sigma, n)            # Noise.sample, loi "normale"
 $\varepsilon_k \sim \mathcal{N}(0, \sigma^2)$. Avec $\sigma = 5$ km/h : environ 68 % des points s'écartent de la
 vraie courbe de moins de 5 km/h, et 95 % de moins de 10 km/h. ($\sigma$ est l'**écart-type** ; la variance vaut $\sigma^2$.)
 
+**Variante — un écart-type $\sigma_i$ par voiture** (`Noise("normale", sigma_range=(alpha1, alpha2))`)
+
+On suppose un point par voiture, donc des points indépendants, et chaque voiture a son propre capteur, plus ou
+moins précis. Pour chaque point $i$ :
+
+1. on tire son écart-type selon une loi normale qui met 99,7 % des valeurs entre $\alpha_1$ et $\alpha_2$
+   (règle des 3 sigma : entre $\alpha_1$ et $\alpha_2$ il y a 6 écarts-types) :
+   $$\sigma_i \sim \mathcal{N}\left(\mu_\sigma, s^2\right), \qquad \mu_\sigma = \frac{\alpha_1 + \alpha_2}{2}, \qquad s = \frac{\alpha_2 - \alpha_1}{6}$$
+2. les rares $\sigma_i$ (environ 0,3 %) qui sortent de $[\alpha_1, \alpha_2]$ sont ramenés à la borne la plus proche ;
+   comme $\alpha_1 \ge 0$, un $\sigma_i$ n'est jamais négatif ;
+3. on tire le bruit du point : $\varepsilon_i \sim \mathcal{N}(0, \sigma_i^2)$.
+
+```python
+sigmas = np.clip(rng.normal(moyenne, ecart_type, n), alpha1, alpha2)   # Noise.sample_sigmas
+bruit = rng.normal(0.0, sigmas)                                        # Noise.sample
+```
+
+Exemple avec $\alpha_1 = 2$ et $\alpha_2 = 8$ km/h : $\mu_\sigma = 5$ km/h et $s = 1$ km/h. Les $\sigma_i$ tirés sont
+dans `bruit.last_sigmas`, et `python src/vitesse/noise.py` vérifie ces chiffres sur 100 000 voitures.
+
+À savoir : le maximum de vraisemblance suppose un seul $\sigma$ pour tous les points. Avec des $\sigma_i$ variables il
+fonctionne quand même, mais le $\hat\sigma$ estimé est une sorte de moyenne : $\hat\sigma^2 \approx$ moyenne des $\sigma_i^2$.
+
 **Étape 4 — la vitesse mesurée**
 
 $$v_k = v(x_k) + \varepsilon_k$$
@@ -267,5 +290,6 @@ Le titre de la figure contient aussi la graine, donc une image sauvegardée « s
 | Créer le générateur / la graine | `src/vitesse/measurements.py` | `create_rng` |
 | Tirer les positions (loi uniforme) | `src/vitesse/measurements.py` | `generate_positions` |
 | Tirer le bruit (loi normale) | `src/vitesse/noise.py` | `Noise.sample` |
+| Tirer un $\sigma_i$ par voiture | `src/vitesse/noise.py` | `Noise.sample_sigmas` |
 | Vitesse mesurée = vraie + bruit | `src/vitesse/measurements.py` | `simulate_speeds` |
 | Tout enchaîner | `tests/mains/main_03_simulation.py` | `main()` |
