@@ -56,9 +56,11 @@ $$
 **Sur la caractérisation**
 
 1. Comment le caractériser ? Quels outils ?
+      - Biais, variance 
 
+      - Matrice de Fisher
       - Borne de Cramér-Rao
-      - Vu peut-être lors des prochains TP ?
+      - Vu peut-être lors des prochains TP2 ?
       - Estimation bayésienne ?
 
 2. Que se passe-t-il si $D \neq D_{estimé}$ ? 
@@ -72,4 +74,20 @@ $$
  2. Différentes variances sur les véhicules (car précision des capteurs différente)
 
  **À faire pour la prochaine séance**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
