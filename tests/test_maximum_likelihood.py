@@ -3,8 +3,7 @@ import numpy as np
 import pytest
 from scipy.optimize import minimize
 
-from vitesse import (MaximumLikelihood, Noise, SpeedPolynomial, create_rng, generate_positions, log_likelihood,
-                     log_likelihood_variable_sigma, simulate_speeds)
+from vitesse import MaximumLikelihood, Noise, SpeedPolynomial, create_rng, generate_positions, log_likelihood, simulate_speeds
 
 # ----------------------------------------------------------------------
 # 1. PARAMETRES
@@ -13,10 +12,9 @@ LONGUEUR = 2000.0                    # longueur du tronçon [m]
 V0, VL = 70.0, 80.0                  # vitesses de début et de fin [km/h]
 D = 2                                # degré
 COEFS_LIBRES = [-58.0]               # c2 -> c = [70, 68, -58]
-SIGMA = 5.0                          # écart-type du bruit, modèle « sigma_fixe » [km/h]
-ALPHA1, ALPHA2 = 2.0, 8.0            # plage des sigma_i, modèle « sigma_variable » [km/h]
-N_BEAUCOUP = 5000                    # il faut beaucoup de points pour bien estimer alpha1 et alpha2
-TOL_ALPHA = 0.5                      # tolérance sur alpha1, alpha2 estimés [km/h]
+SIGMA = 5.0                          # écart-type du bruit, cas sigma fixe [km/h]
+ALPHA1, ALPHA2 = 2.0, 8.0            # plage des sigma_i (un sigma_i par voiture) [km/h]
+N_BEAUCOUP = 5000                    # beaucoup de points (cas sigma_i variables)
 N_POINTS = 2000                      # beaucoup de points pour une estimation précise
 N_PEU = 200                          # moins de points (comparaison de la précision)
 GRAINE = 0                           # graine aléatoire
@@ -25,7 +23,7 @@ TOL_SIGMA = 0.3                      # tolérance sur sigma estimé [km/h]
 
 
 def donnees(n, sigma=SIGMA, graine=GRAINE):
-    """Données simulées avec un sigma FIXE (modèle simple)."""
+    """Données simulées avec un sigma FIXE."""
     rng, _ = create_rng(graine)
     poly = SpeedPolynomial(LONGUEUR, V0, VL, D, COEFS_LIBRES)
     x = generate_positions(n, LONGUEUR, rng)
@@ -34,7 +32,7 @@ def donnees(n, sigma=SIGMA, graine=GRAINE):
 
 
 def donnees_variables(n, graine=GRAINE):
-    """Données simulées avec un sigma_i par voiture (notre modèle)."""
+    """Données simulées avec un sigma_i par voiture (notre modèle de bruit)."""
     rng, _ = create_rng(graine)
     poly = SpeedPolynomial(LONGUEUR, V0, VL, D, COEFS_LIBRES)
     x = generate_positions(n, LONGUEUR, rng)
@@ -43,49 +41,18 @@ def donnees_variables(n, graine=GRAINE):
 
 
 def fixe():
-    return MaximumLikelihood(LONGUEUR, D, noise_model="sigma_fixe")
+    return MaximumLikelihood(LONGUEUR, D)
 
 
-# ------------------- notre modèle : un sigma_i par voiture -------------------
-def test_variable_sigma_recovers_coefficients_and_sigma_range():
+# ------------------- données à sigma_i variables (un par voiture) -------------------
+def test_variable_sigma_data_coefficients_and_global_sigma_are_recovered():
+    # Méthode du TP2 appliquée à des mesures dont chaque voiture a son propre sigma_i :
+    # les coefficients restent bien estimés, et sigma_chapeau ≈ écart-type global = racine(E[sigma_i²]).
     poly, x, v = donnees_variables(N_BEAUCOUP)
-    est = MaximumLikelihood(LONGUEUR, D).fit(x, v)                  # "sigma_variable" par défaut
+    est = MaximumLikelihood(LONGUEUR, D).fit(x, v)
     np.testing.assert_allclose(est.coefficients, poly.coefficients, atol=TOL_COEF)
-    assert est.alpha1 == pytest.approx(ALPHA1, abs=TOL_ALPHA)
-    assert est.alpha2 == pytest.approx(ALPHA2, abs=TOL_ALPHA)
     sigma_global = np.sqrt(((ALPHA1 + ALPHA2) / 2) ** 2 + ((ALPHA2 - ALPHA1) / 6) ** 2)
     assert est.sigma == pytest.approx(sigma_global, abs=TOL_SIGMA)
-
-
-def test_variable_sigma_estimate_maximizes_its_log_likelihood():
-    _, x, v = donnees_variables(N_PEU)
-    est = MaximumLikelihood(LONGUEUR, D).fit(x, v)
-    ll_opt = log_likelihood_variable_sigma(est.coefficients, est.alpha1, est.alpha2, x, v, LONGUEUR)
-    for dc, da1, da2 in [((0, 2, -2), 0, 0), ((0, 0, 0), 0.5, 0), ((0, 0, 0), 0, 0.5), ((0, 0, 0), -0.3, -0.5)]:
-        ll_autre = log_likelihood_variable_sigma(est.coefficients + np.array(dc), est.alpha1 + da1,
-                                                 est.alpha2 + da2, x, v, LONGUEUR)
-        assert ll_opt > ll_autre
-
-
-def test_variable_sigma_fits_better_than_fixed_sigma_on_variable_data():
-    # sur des données à sigma_i variables, notre modèle explique mieux les mesures que le modèle sigma fixe
-    _, x, v = donnees_variables(N_BEAUCOUP)
-    var = MaximumLikelihood(LONGUEUR, D).fit(x, v)
-    simple = fixe().fit(x, v)
-    ll_var = log_likelihood_variable_sigma(var.coefficients, var.alpha1, var.alpha2, x, v, LONGUEUR)
-    ll_fixe = log_likelihood(simple.coefficients, simple.sigma, x, v, LONGUEUR)
-    assert ll_var > ll_fixe
-
-
-def test_variable_sigma_without_noise_is_rejected():
-    _, x, v = donnees(50, sigma=0.0)
-    with pytest.raises(ValueError):
-        MaximumLikelihood(LONGUEUR, D).fit(x, v)
-
-
-def test_unknown_noise_model_is_rejected():
-    with pytest.raises(ValueError):
-        MaximumLikelihood(LONGUEUR, D, noise_model="modele_qui_nexiste_pas")
 
 
 # ------------------- modèle simple : sigma fixe (moindres carrés) -------------------
@@ -143,3 +110,42 @@ def test_speed_before_fit_is_rejected():
 def test_not_enough_points_is_rejected():
     with pytest.raises(ValueError):
         MaximumLikelihood(LONGUEUR, 3).fit([0.0, 1.0, 2.0], [1.0, 2.0, 3.0])
+
+
+def test_legendre_basis_gives_the_same_curve_as_canonical():
+    # Les deux bases décrivent les mêmes polynômes : l'estimation de la courbe doit être identique.
+    poly, x, v = donnees(N_PEU)
+    can = MaximumLikelihood(LONGUEUR, D, "canonique").fit(x, v)
+    leg = MaximumLikelihood(LONGUEUR, D, "legendre").fit(x, v)
+    xs = np.linspace(0, LONGUEUR, 50)
+    np.testing.assert_allclose(leg.speed(xs), can.speed(xs), atol=1e-8)
+    np.testing.assert_allclose(leg.canonical_coefficients, can.coefficients, atol=1e-8)
+    assert leg.sigma == pytest.approx(can.sigma)
+
+
+def test_legendre_matrix_is_almost_diagonal():
+    # x uniformes sur [0, L] -> t uniformes sur [-1, 1] -> M quasi diagonale (TP2, section 1.4).
+    _, x, v = donnees(N_POINTS)
+    for base, attendu_petit in (("legendre", True), ("canonique", False)):
+        M = MaximumLikelihood(LONGUEUR, D, base).fit(x, v).M
+        corr = M / np.sqrt(np.outer(np.diag(M), np.diag(M)))   # « cosinus » entre colonnes
+        hors_diag = np.abs(corr[~np.eye(D + 1, dtype=bool)]).max()
+        assert (hors_diag < 0.1) == attendu_petit
+
+
+def test_empirical_covariance_matches_the_crb():
+    # Monte-Carlo : NB échantillons aux MEMES positions ; covariance empirique de c_chapeau ≈ sigma² M^-1.
+    rng, _ = create_rng(GRAINE)
+    poly = SpeedPolynomial(LONGUEUR, V0, VL, D, COEFS_LIBRES)
+    x = generate_positions(N_PEU, LONGUEUR, rng)
+    bruit = Noise("normale", SIGMA, rng)
+    estimes = np.array([MaximumLikelihood(LONGUEUR, D).fit(x, simulate_speeds(poly, bruit, x)).coefficients
+                        for _ in range(2000)])
+    bcr = MaximumLikelihood(LONGUEUR, D).fit(x, poly.speed(x) + 1.0).crb(sigma=SIGMA)
+    np.testing.assert_allclose(estimes.mean(axis=0), poly.coefficients, atol=0.5)       # sans biais
+    np.testing.assert_allclose(np.diag(np.cov(estimes.T)), np.diag(bcr), rtol=0.1)      # atteint la BCR
+
+
+def test_unknown_basis_is_rejected():
+    with pytest.raises(ValueError):
+        MaximumLikelihood(LONGUEUR, D, "fourier")

@@ -20,7 +20,7 @@ $$
 - **Cas simple** : $\varepsilon_k \sim \mathcal{N}(0, \sigma^2)$ i.i.d., positions $x_k$ uniformes sur $[0, L]$.
 - **Cas difficile** (à préciser avec le professeur) : 
    - Valeurs aberrantes --> créées automatiquement par la génération ?
-   - Variance différente par capteur : **implémenté** (`Noise(..., sigma_range=(alpha1, alpha2))`). Un point par voiture ; pour chaque point on tire $\sigma_i \sim \mathcal{N}\big(\frac{\alpha_1+\alpha_2}{2}, (\frac{\alpha_2-\alpha_1}{6})^2\big)$ (99,7 % dans $[\alpha_1, \alpha_2]$, les autres ramenés à la borne la plus proche), puis $\varepsilon_i \sim \mathcal{N}(0, \sigma_i^2)$
+   - Variance différente par capteur : **implémenté** (`Noise(..., sigma_range=(alpha1, alpha2))`). Un point par voiture ; pour chaque point on tire $\sigma_i \sim \mathcal{N}\big(\frac{\alpha_1+\alpha_2}{2}, (\frac{\alpha_2-\alpha_1}{6})^2\big)$ (99,7 % dans $[\alpha_1, \alpha_2]$, les autres ramenés à la borne la plus proche), puis $\varepsilon_i \sim \mathcal{N}(0, \sigma_i^2)$. Détails : `explications.md`, section 0
    - Si plusieurs virages --> décélération puis réaccélération ? Si oui, corrélation possible avec d et le nombre de virages ? Pour ça, voir TP1/2
 
 
@@ -30,7 +30,7 @@ $$
 1. Les positions sont-elles aléatoires uniformes ou imposées (plan d'expérience) ? Le nombre
    d'envois par véhicule suit-il une loi précise ? Un véhicule peut-il envoyer plusieurs valeurs ? (Si oui : à intervalle de distance régulier ? Un véhicule lent envoie-t-il plus de positions qu'un rapide ?)
    
-   - On veut des tirages indépendants, donc on choisit d'avoir un unique point par véhicule sur un tronçon. On utilise ue loi normale pour les $\sigma_i$ car c'est il représente plusieurs sources de bruit.
+   - On veut des tirages indépendants, donc on choisit d'avoir un unique point par véhicule sur un tronçon. On utilise une loi normale pour les $\sigma_i$ car il représente plusieurs sources de bruit.
 
 2. Est-ce qu'en générant avec RNG, mais avec une même graine, une loi uniforme et la loi normale, $x_k$ devient corrélé à $\epsilon_k$ ?
 
@@ -56,9 +56,11 @@ $$
 **Sur la caractérisation**
 
 1. Comment le caractériser ? Quels outils ?
+      - Biais, variance 
 
+      - Matrice de Fisher
       - Borne de Cramér-Rao
-      - Vu peut-être lors des prochains TP ?
+      - Vu peut-être lors des prochains TP2 ?
       - Estimation bayésienne ?
 
 2. Que se passe-t-il si $D \neq D_{estimé}$ ? 
@@ -72,4 +74,20 @@ $$
  2. Différentes variances sur les véhicules (car précision des capteurs différente) : **fait** (simulation des $\sigma_i$ dans `noise.py`, estimation de $\alpha_1$, $\alpha_2$ dans `maximum_likelihood.py`)
 
  **À faire pour la prochaine séance**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

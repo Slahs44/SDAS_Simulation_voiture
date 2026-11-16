@@ -1,7 +1,7 @@
 """Main 4 - Retrouver le polynôme par maximum de vraisemblance.
-On simule des mesures (polynôme + bruit normal, un sigma_i par voiture), puis on estime les coefficients et la
-plage [alpha1, alpha2] des sigma_i à partir des seules mesures, et on compare à la vérité.
-On compare aussi au modèle simple « sigma_fixe » (= moindres carrés)."""
+On simule des mesures (polynôme + bruit normal, un sigma_i par voiture), puis on estime les coefficients et
+l'écart-type global du bruit par la méthode du TP2 (c_chapeau = M^-1 · w), à partir des seules mesures,
+et on compare à la vérité."""
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -21,6 +21,7 @@ COEFS_LIBRES = None                     # None = calcul automatique ; ou une lis
 ALPHA1, ALPHA2 = 2.0, 8.0               # plage des sigma_i [km/h] : 99,7 % des sigma_i entre ALPHA1 et ALPHA2
 N_POINTS = 1000                          # nombre de points mesurés
 N_SIGMA = 2.0                           # largeur de la bande : ± N_SIGMA · sigma_chapeau (écart-type global estimé) (1 -> ~68 % des mesures, 2 -> ~95 %, 3 -> ~99,7 %)
+BASE = "canonique"                      # base des polynômes pour l'estimation : "canonique" ou "legendre"
 D_ESTIME = D +1                           # degré utilisé pour l'estimation (en vrai il est « connu » : = D ; essaie D+1 ou D-1)
 GRAINE = None                           # None = aléatoire (graine affichée) ; un entier = reproductible
 AFFICHER = True                         # True : ouvre la fenêtre du graphique ; False : sauvegarde seulement
@@ -37,20 +38,16 @@ def main():
     sigma_global_vrai = np.sqrt(np.mean(bruit.last_sigmas ** 2))   # écart-type global du bruit simulé
 
     # 2) Estimer par maximum de vraisemblance (on n'utilise que x et v, pas le vrai polynôme)
-    estimateur = MaximumLikelihood(LONGUEUR, D_ESTIME).fit(x, v)                       # notre modèle (sigma_i)
-    simple = MaximumLikelihood(LONGUEUR, D_ESTIME, noise_model="sigma_fixe").fit(x, v)  # modèle simple, pour comparer
+    estimateur = MaximumLikelihood(LONGUEUR, D_ESTIME, BASE).fit(x, v)
 
     # 3) Comparer à la vérité
     print("coefficients vrais    :", np.round(vrai.coefficients, 2))
-    print("coefficients estimes  :", np.round(estimateur.coefficients, 2))
-    print(f"alpha1 : vrai {ALPHA1:.2f}   estime {estimateur.alpha1:.2f} km/h")
-    print(f"alpha2 : vrai {ALPHA2:.2f}   estime {estimateur.alpha2:.2f} km/h")
+    print("coefficients estimes  :", np.round(estimateur.canonical_coefficients, 2))
     print(f"sigma global : vrai {sigma_global_vrai:.2f}   estime {estimateur.sigma:.2f} km/h")
     grille = np.linspace(0, LONGUEUR, 300)
-    for nom, est in (("sigma_i (notre modele)", estimateur), ("sigma fixe (simple)   ", simple)):
-        erreur = est.speed(grille) - vrai.speed(grille)
-        print(f"erreur sur la courbe, {nom} : RMSE = {np.sqrt(np.mean(erreur ** 2)):.2f} km/h,"
-              f" erreur max = {np.abs(erreur).max():.2f} km/h")
+    erreur = estimateur.speed(grille) - vrai.speed(grille)
+    print(f"erreur sur la courbe : RMSE = {np.sqrt(np.mean(erreur ** 2)):.2f} km/h, erreur max = {np.abs(erreur).max():.2f} km/h")
+    print("ecarts-types de la BCR :", np.round(np.sqrt(np.diag(estimateur.crb())), 2))
     centre = estimateur.speed(grille)
     demi_largeur = N_SIGMA * estimateur.sigma
     dans_bande = np.abs(v - estimateur.speed(x)) <= demi_largeur
@@ -66,8 +63,7 @@ def main():
                  label=f"estimation ± {N_SIGMA:g} sigma_chapeau")
     plt.xlabel("position x [m]")
     plt.ylabel("vitesse [km/h]")
-    plt.title(f"Maximum de vraisemblance : sigma_i dans [{ALPHA1}, {ALPHA2}], "
-              f"estime [{estimateur.alpha1:.1f}, {estimateur.alpha2:.1f}] (graine {graine})")
+    plt.title(f"Maximum de vraisemblance (base {BASE}) : sigma_i dans [{ALPHA1}, {ALPHA2}] (graine {graine})")
     plt.grid(alpha=0.3)
     plt.legend()
     dossier = Path(__file__).resolve().parents[2] / "figures"

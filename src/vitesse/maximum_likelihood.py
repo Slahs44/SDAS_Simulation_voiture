@@ -1,125 +1,109 @@
 """
-maximum_likelihood.py - Retrouver le polynôme à partir des mesures (maximum de vraisemblance)
-=============================================================================================
+maximum_likelihood.py - Retrouver le polynôme à partir des mesures (maximum de vraisemblance, méthode du TP2)
+============================================================================================================
 
-On dispose de N mesures (x_i, v_i), une par voiture, et on connaît le degré d. On cherche les coefficients
-c0, c1, ..., cd (et les paramètres du bruit) qui rendent les mesures « les plus probables ».
+On dispose de N mesures (x_i, s_i) et on connaît le degré n0. On cherche les coefficients c0, ..., c_n0
+(et l'écart-type sigma du bruit) qui rendent les mesures « les plus probables ».
 
-La vraisemblance : c'est la densité de probabilité d'observer EXACTEMENT les mesures obtenues, vue comme une
-fonction des paramètres. Pour des mesures indépendantes, on multiplie les densités de chaque point ; avec le
-logarithme (plus pratique), le produit devient une somme :  log L = somme_i log f(v_i - v(x_i)).
+1) Le modèle (TP2, section 1.1) :
 
-Deux modèles de bruit (paramètre `noise_model` de MaximumLikelihood) :
+       s(x_i) = somme_n  c_n · P_n(x_i)  +  b(x_i),      b ~ Normale(0, sigma²)  (bruit blanc gaussien)
 
-A) "sigma_variable" (par défaut, c'est notre modèle) : chaque voiture i a son propre écart-type sigma_i,
-   inconnu, tiré comme dans noise.py :
-       sigma_i = S_i ramené dans [alpha1, alpha2],   S_i ~ Normale(mu, s²),
-       mu = (alpha1 + alpha2) / 2,   s = (alpha2 - alpha1) / 6,
-       v_i = v(x_i) + eps_i,   eps_i ~ Normale(0, sigma_i²).
-   On ne connaît pas sigma_i, donc la densité d'un résidu r est la MOYENNE des densités normales sur
-   toutes les valeurs possibles de sigma_i (un « mélange ») :
-       f(r) = somme_k  w_k · Normale(r ; 0, sigma_k²)
-   où les sigma_k couvrent [alpha1, alpha2] et les poids w_k suivent la loi de sigma_i :
-     - deux masses de probabilité Phi(-3) ≈ 0,135 % sur alpha1 et sur alpha2 (les tirages ramenés aux bornes) ;
-     - entre les deux, la cloche de S_i, discrétisée en N_NOEUDS points (quadrature de Gauss-Legendre).
-   On maximise log L par rapport à (c0..cd, alpha1, alpha2) numériquement (scipy), en partant des moindres carrés.
+   Les P_n forment une base des polynômes de degré n0. Deux bases sont proposées :
+     - "canonique" : P_n(x) = ξ^n            avec ξ = x / L       dans [0, 1]
+     - "legendre"  : P_n(x) = Legendre_n(t)  avec t = 2x / L - 1  dans [-1, 1]  (base quasi-orthogonale)
 
-B) "sigma_fixe" (cas simple, pour comparaison) : un seul sigma pour tous les points.
-       log L = - N/2 · log(2π·sigma²)  -  (1 / (2·sigma²)) · somme_i ( v_i - v(x_i) )²
-   - par rapport aux coefficients c : maximiser log L revient à MINIMISER somme_i ( v_i - v(x_i) )²
-     (= méthode des moindres carrés). Pour un bruit NORMAL de sigma fixe, maximum de vraisemblance = moindres carrés.
-   - par rapport à sigma : sigma_chapeau² = (1/N) · somme_i ( v_i - v_chapeau(x_i) )².
+2) La log-vraisemblance (TP2, section 1.2) :
 
-Attention : si le bruit suit une autre loi (valeurs aberrantes...), ce n'est plus la bonne vraisemblance.
+       l(c) = - 1/(2·sigma²) · somme_i [ s(x_i) - somme_n c_n P_n(x_i) ]²  -  N · log(√(2π) · sigma)
+
+3) Annuler les dérivées par rapport aux c_n donne un système linéaire :
+
+       M · c = w      avec   M[n, m] = somme_i P_n(x_i) · P_m(x_i)      (matrice (n0+1) x (n0+1))
+                             w[n]    = somme_i P_n(x_i) · s(x_i)        (vecteur noté v dans le TP)
+
+   d'où l'estimateur du maximum de vraisemblance :   c_chapeau = M^-1 · w        (équation (1) du TP)
+   et, en annulant la dérivée par rapport à sigma :   sigma_chapeau² = (1/N) · somme_i (résidu_i)².
+
+4) Borne de Cramér-Rao (TP2, section 1.3) : l'information de Fisher vaut  I_F = M / sigma², donc
+
+       BCR = I_F^-1 = sigma² · M^-1
+
+   Aucun estimateur sans biais ne peut avoir une matrice de covariance plus petite. En base de Legendre avec
+   des x_i uniformes, M est presque diagonale : les coefficients estimés sont presque décorrélés.
+
+   Attention : si le bruit n'est pas gaussien (autre loi, valeurs aberrantes), ce n'est plus la bonne vraisemblance.
 """
-import math
-
 import numpy as np
-from scipy.optimize import minimize
+from numpy.polynomial import Polynomial
+from numpy.polynomial import legendre
 
-MODELES_DISPONIBLES = ("sigma_variable", "sigma_fixe")
-N_NOEUDS = 40                                         # nombre de points pour discrétiser la loi des sigma_i
-P_BORNE = 0.5 * math.erfc(3 / math.sqrt(2))           # P(S_i < mu - 3s) = Phi(-3) ≈ 0,00135 (= masse sur chaque borne)
+BASES = ("canonique", "legendre")
+
+
+def basis_matrix(x, length, degree, basis="canonique"):
+    """Matrice P de taille (N, n0+1) avec P[i, n] = P_n(x_i).
+
+    Avec elle, toutes les vitesses du polynôme s'écrivent d'un coup :  somme_n P[i, n] · c_n = (P @ c)_i,
+    écrit ci-dessous avec np.dot."""
+    if basis not in BASES:
+        raise ValueError(f"base inconnue : {basis!r} (choisir parmi {BASES})")
+    xi = np.asarray(x, dtype=float) / length          # ξ dans [0, 1]
+    if basis == "legendre":
+        return legendre.legvander(2.0 * xi - 1.0, degree)   # colonne n : Legendre_n(t), t dans [-1, 1]
+    P = np.zeros((len(xi), degree + 1))
+    for n in range(degree + 1):
+        P[:, n] = xi ** n                             # colonne n : tous les ξ_i élevés à la puissance n
+    return P
 
 
 def vandermonde(x, length, degree):
-    """Matrice A de taille (N, d+1) avec A[k, j] = ξ_k^j  (ξ_k = x_k / L).
-
-    Avec elle, toutes les vitesses du polynôme s'écrivent d'un coup :  v(x_k) = somme_j A[k, j] · cj,
-    c'est-à-dire le produit matrice-vecteur  A @ c  (écrit ci-dessous avec np.dot, sans symbole spécial)."""
-    xi = np.asarray(x, dtype=float) / length
-    A = np.zeros((len(xi), degree + 1))
-    for j in range(degree + 1):
-        A[:, j] = xi ** j               # colonne j : tous les ξ_k élevés à la puissance j
-    return A
+    """Cas particulier de la base canonique : A[i, n] = ξ_i^n (gardé pour compatibilité)."""
+    return basis_matrix(x, length, degree, "canonique")
 
 
-def log_likelihood(coefficients, sigma, x, v, length):
-    """log-vraisemblance log L du modèle « sigma_fixe » pour des coefficients et un sigma donnés."""
+def normal_matrix(x, length, degree, basis="canonique"):
+    """Matrice M du TP2 :  M[n, m] = somme_i P_n(x_i) · P_m(x_i)   (= P^T · P)."""
+    P = basis_matrix(x, length, degree, basis)
+    return np.dot(P.T, P)
+
+
+def log_likelihood(coefficients, sigma, x, v, length, basis="canonique"):
+    """log-vraisemblance l(c) des mesures (x, v) pour des coefficients (dans la base choisie) et un sigma donnés."""
     degree = len(coefficients) - 1
-    A = vandermonde(x, length, degree)
-    residus = v - np.dot(A, coefficients)            # v_i - v(x_i) pour chaque point
-    n = len(v)
-    return -0.5 * n * np.log(2 * np.pi * sigma ** 2) - np.sum(residus ** 2) / (2 * sigma ** 2)
-
-
-def sigma_distribution(alpha1, alpha2):
-    """Loi discrétisée des sigma_i : renvoie (sigmas_k, poids_k), avec somme des poids = 1.
-
-    sigmas_k = mu + s·t_k  pour t_k entre -3 et +3 ; poids_k = probabilité de chaque valeur.
-    Les deux extrémités (t = -3 et t = +3, soit alpha1 et alpha2) portent en plus la masse P_BORNE des tirages
-    qui sortaient de [alpha1, alpha2] et ont été ramenés à la borne."""
-    t, w = np.polynomial.legendre.leggauss(N_NOEUDS)  # noeuds et poids de Gauss-Legendre sur [-1, 1]
-    t = 3 * t                                         # -> noeuds sur [-3, 3]
-    w = w * np.exp(-t ** 2 / 2)                       # pondérés par la cloche de S_i (en unités de s)
-    w = w / w.sum() * (1 - 2 * P_BORNE)               # l'intérieur de [alpha1, alpha2] a la probabilité 99,73 %
-    t = np.concatenate([[-3.0], t, [3.0]])
-    w = np.concatenate([[P_BORNE], w, [P_BORNE]])
-    mu = (alpha1 + alpha2) / 2
-    s = (alpha2 - alpha1) / 6
-    return mu + s * t, w
-
-
-def log_likelihood_variable_sigma(coefficients, alpha1, alpha2, x, v, length):
-    """log-vraisemblance log L du modèle « sigma_variable » (un sigma_i inconnu par voiture, dans [alpha1, alpha2])."""
-    degree = len(coefficients) - 1
-    A = vandermonde(x, length, degree)
-    residus = np.asarray(v, dtype=float) - np.dot(A, coefficients)
-    sigmas, poids = sigma_distribution(alpha1, alpha2)
-    # densite[i, k] = poids_k · Normale(residu_i ; 0, sigma_k²) ; on somme sur k pour avoir f(residu_i)
-    densite = poids * np.exp(-residus[:, None] ** 2 / (2 * sigmas ** 2)) / (sigmas * np.sqrt(2 * np.pi))
-    return np.sum(np.log(densite.sum(axis=1) + 1e-300))    # (+1e-300 : évite log(0) si un résidu est énorme)
+    P = basis_matrix(x, length, degree, basis)
+    residus = np.asarray(v, dtype=float) - np.dot(P, coefficients)    # s(x_i) - somme_n c_n P_n(x_i)
+    n = len(residus)
+    return -np.sum(residus ** 2) / (2 * sigma ** 2) - n * np.log(np.sqrt(2 * np.pi) * sigma)
 
 
 class MaximumLikelihood:
-    """Estimateur du polynôme par maximum de vraisemblance.
+    """Estimateur du polynôme par maximum de vraisemblance (bruit blanc gaussien), méthode du TP2.
 
-        estimateur = MaximumLikelihood(length=1500, degree=4)          # modèle "sigma_variable" par défaut
-        estimateur.fit(x, v)             # calcule les coefficients et les paramètres du bruit
-        estimateur.coefficients          # [c0, c1, ..., cd] estimés
-        estimateur.alpha1, .alpha2       # bornes estimées des sigma_i [km/h] (None en "sigma_fixe")
-        estimateur.sigma                 # écart-type GLOBAL du bruit estimé [km/h] (= racine(moyenne des sigma_i²))
+        estimateur = MaximumLikelihood(length=2000, degree=2, basis="canonique")   # ou basis="legendre"
+        estimateur.fit(x, v)             # calcule c_chapeau = M^-1 · w et sigma_chapeau
+        estimateur.coefficients          # [c0, ..., c_n0] estimés DANS LA BASE CHOISIE
+        estimateur.canonical_coefficients  # les mêmes, convertis en base canonique (comparables à SpeedPolynomial)
+        estimateur.sigma                 # écart-type du bruit estimé [km/h]
+        estimateur.crb()                 # borne de Cramér-Rao  sigma² · M^-1
         estimateur.speed(1000)           # vitesse estimée en x = 1000 m
 
-    Ici les d+1 coefficients sont estimés librement : on ne suppose PAS connus V0 et VL (on ne les connaît pas
-    en vrai, ce sont justement des choses à retrouver).
-    Remarque : avec une seule mesure par voiture, chaque sigma_i reste inconnu ; on estime seulement la loi
-    des sigma_i (alpha1, alpha2). Il faut beaucoup de points (≈ 1000) pour que alpha1 et alpha2 soient précis."""
+    Les n0+1 coefficients sont estimés librement : on ne suppose PAS connus V0 et VL."""
 
-    def __init__(self, length, degree, noise_model="sigma_variable"):
+    def __init__(self, length, degree, basis="canonique"):
         if length <= 0:
             raise ValueError("la longueur doit être > 0")
         if degree < 1:
             raise ValueError("le degré doit être >= 1")
-        if noise_model not in MODELES_DISPONIBLES:
-            raise ValueError(f"modèle inconnu : '{noise_model}'. Modèles disponibles : {MODELES_DISPONIBLES}")
+        if basis not in BASES:
+            raise ValueError(f"base inconnue : {basis!r} (choisir parmi {BASES})")
         self.length = length
         self.degree = degree
-        self.noise_model = noise_model
-        self.coefficients = None        # remplis par fit()
+        self.basis = basis
+        self.M = None                   # remplis par fit()
+        self.w = None
+        self.coefficients = None
         self.sigma = None
-        self.alpha1 = None
-        self.alpha2 = None
 
     def fit(self, x, v):
         """Calcule le maximum de vraisemblance à partir des positions x [m] et des vitesses mesurées v [km/h]."""
@@ -130,38 +114,44 @@ class MaximumLikelihood:
         if len(x) < self.degree + 1:
             raise ValueError(f"il faut au moins {self.degree + 1} points pour estimer un polynôme de degré {self.degree}")
 
-        # 1) Moindres carrés : c'est le MV exact en "sigma_fixe", et le point de départ en "sigma_variable"
-        A = vandermonde(x, self.length, self.degree)
-        self.coefficients = np.linalg.lstsq(A, v, rcond=None)[0]
-        residus = v - np.dot(A, self.coefficients)
-        self.sigma = np.sqrt(np.mean(residus ** 2))       # sigma_chapeau (division par N : c'est le vrai MV)
-        if self.noise_model == "sigma_fixe":
-            return self                                   # permet d'écrire MaximumLikelihood(...).fit(x, v)
+        P = basis_matrix(x, self.length, self.degree, self.basis)
+        self.M = np.dot(P.T, P)                          # M[n, m] = somme_i P_n(x_i) P_m(x_i)
+        self.w = np.dot(P.T, v)                          # w[n]    = somme_i P_n(x_i) s(x_i)
+        # c_chapeau = M^-1 · w : on résout le système M c = w (même résultat que d'inverser M, mais plus précis)
+        self.coefficients = np.linalg.solve(self.M, self.w)
+        residus = v - np.dot(P, self.coefficients)
+        self.sigma = np.sqrt(np.mean(residus ** 2))      # sigma_chapeau (division par N : c'est le vrai MV)
+        return self                                      # permet d'écrire MaximumLikelihood(...).fit(x, v)
 
-        # 2) "sigma_variable" : maximisation numérique de log L sur (c0..cd, alpha1, alpha2).
-        #    On optimise log(alpha1) et log(alpha2 - alpha1) pour garantir 0 < alpha1 < alpha2.
-        #    Départ : alpha1, alpha2 autour de sigma_chapeau (± 50 %).
-        if self.sigma < 1e-9:                             # (pas exactement 0 à cause des arrondis de calcul)
-            raise ValueError("bruit nul : utilise noise_model='sigma_fixe'")
-        depart_a1, depart_a2 = 0.5 * self.sigma, 1.5 * self.sigma
-        p0 = np.concatenate([self.coefficients, [np.log(depart_a1), np.log(depart_a2 - depart_a1)]])
+    def _check_fitted(self):
+        if self.coefficients is None:
+            raise ValueError("appelle fit(x, v) d'abord")
 
-        def moins_log_l(p):
-            alpha1 = np.exp(p[-2])
-            alpha2 = alpha1 + np.exp(p[-1])
-            return -log_likelihood_variable_sigma(p[:-2], alpha1, alpha2, x, v, self.length)
+    def fisher_information(self, sigma=None):
+        """Information de Fisher I_F = M / sigma²  (sigma = sigma_chapeau si non précisé)."""
+        self._check_fitted()
+        s = self.sigma if sigma is None else sigma
+        return self.M / s ** 2
 
-        res = minimize(moins_log_l, p0, method="L-BFGS-B")
-        self.coefficients = res.x[:-2]
-        self.alpha1 = float(np.exp(res.x[-2]))
-        self.alpha2 = float(self.alpha1 + np.exp(res.x[-1]))
-        sigmas, poids = sigma_distribution(self.alpha1, self.alpha2)
-        self.sigma = float(np.sqrt(np.sum(poids * sigmas ** 2)))   # écart-type global = racine(moyenne des sigma_i²)
-        return self
+    def crb(self, sigma=None):
+        """Borne de Cramér-Rao  I_F^-1 = sigma² · M^-1 : covariance minimale d'un estimateur sans biais de c."""
+        self._check_fitted()
+        s = self.sigma if sigma is None else sigma
+        return s ** 2 * np.linalg.inv(self.M)
+
+    @property
+    def canonical_coefficients(self):
+        """Coefficients en base canonique (en ξ = x/L), pour comparer à SpeedPolynomial.coefficients."""
+        self._check_fitted()
+        if self.basis == "canonique":
+            return self.coefficients.copy()
+        en_t = Polynomial(legendre.leg2poly(self.coefficients))   # polynôme en t
+        en_xi = en_t(Polynomial([-1.0, 2.0]))                     # on remplace t par 2ξ - 1
+        return np.pad(en_xi.coef, (0, self.degree + 1 - len(en_xi.coef)))
 
     def speed(self, x):
         """Vitesse estimée v_chapeau(x) [km/h] (appeler fit() d'abord)."""
         if self.coefficients is None:
             raise ValueError("appelle fit(x, v) avant speed(x)")
-        A = vandermonde(np.atleast_1d(x), self.length, self.degree)
-        return np.dot(A, self.coefficients)
+        P = basis_matrix(np.atleast_1d(x), self.length, self.degree, self.basis)
+        return np.dot(P, self.coefficients)
