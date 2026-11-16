@@ -13,6 +13,7 @@ from vitesse import Noise
 SIGMA = 2.0                          # écart-type du bruit testé [km/h]
 N_TIRAGES = 200_000                  # beaucoup de tirages -> les statistiques sont précises
 GRAINE = 0                           # graine aléatoire (résultats reproductibles)
+ALPHA1, ALPHA2 = 2.0, 8.0            # plage des sigma_i (un écart-type par voiture) [km/h]
 
 
 def test_sample_returns_n_values():
@@ -45,3 +46,43 @@ def test_unknown_law_is_rejected():
 def test_negative_sigma_is_rejected():
     with pytest.raises(ValueError):
         Noise("normale", -1.0)
+
+
+# ------------------- sigma_i par voiture (sigma_range) -------------------
+def bruit_variable(graine=GRAINE, plage=(ALPHA1, ALPHA2)):
+    return Noise("normale", rng=np.random.default_rng(graine), sigma_range=plage)
+
+
+def test_sigmas_follow_the_3_sigma_rule_and_stay_in_the_range():
+    sigmas = bruit_variable().sample_sigmas(N_TIRAGES)
+    assert sigmas.mean() == pytest.approx((ALPHA1 + ALPHA2) / 2, rel=0.01)       # moyenne au milieu
+    assert sigmas.std() == pytest.approx((ALPHA2 - ALPHA1) / 6, rel=0.02)        # 6 écarts-types entre alpha1 et alpha2
+    assert sigmas.min() >= ALPHA1 and sigmas.max() <= ALPHA2                     # toujours dans [alpha1, alpha2]
+
+
+def test_out_of_range_sigmas_are_set_to_the_nearest_bound():
+    sigmas = bruit_variable().sample_sigmas(N_TIRAGES)
+    # environ 0,135 % des tirages sortent de chaque côté et sont ramenés exactement sur la borne
+    assert np.mean(sigmas == ALPHA1) == pytest.approx(0.00135, abs=0.0005)
+    assert np.mean(sigmas == ALPHA2) == pytest.approx(0.00135, abs=0.0005)
+
+
+def test_variable_sigma_noise_uses_one_sigma_per_point():
+    bruit = bruit_variable()
+    valeurs = bruit.sample(N_TIRAGES)
+    assert len(bruit.last_sigmas) == N_TIRAGES                                   # un sigma_i par point
+    assert abs(valeurs.mean()) < 0.05                                            # bruit centré
+    assert valeurs.var() == pytest.approx(np.mean(bruit.last_sigmas ** 2), rel=0.02)   # variance = moyenne des sigma_i²
+    grands = bruit.last_sigmas > (ALPHA1 + ALPHA2) / 2
+    assert valeurs[grands].std() > valeurs[~grands].std()                        # grand sigma_i -> plus dispersé
+
+
+def test_variable_sigma_same_seed_gives_same_values():
+    np.testing.assert_array_equal(bruit_variable(7).sample(10), bruit_variable(7).sample(10))
+
+
+def test_bad_sigma_range_is_rejected():
+    with pytest.raises(ValueError):
+        Noise("normale", sigma_range=(5.0, 2.0))          # alpha1 > alpha2
+    with pytest.raises(ValueError):
+        Noise("normale", sigma_range=(-1.0, 2.0))         # alpha1 négatif

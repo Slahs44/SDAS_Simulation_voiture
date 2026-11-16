@@ -69,7 +69,7 @@ $$
 **À faire durant la séance du lundi 16/11**
  1. Répondre à la question : comment caractériser ? Voir les TP2 et le cours pour trouver une ou des méthodes.
  
- 2. Différentes variances sur les véhicules (car précision des capteurs différente)
+ 2. Différentes variances sur les véhicules (car précision des capteurs différente) : **fait** (simulation des $\sigma_i$ dans `noise.py`, estimation de $\alpha_1$, $\alpha_2$ dans `maximum_likelihood.py`)
 
  **À faire pour la prochaine séance**
 
