@@ -15,12 +15,12 @@ LONGUEUR = 1500.0                    # longueur du tronçon [m]
 V0 = 40.0                            # vitesse au début du tronçon [km/h]
 VL = 35.0                            # vitesse à la fin du tronçon [km/h] (doit être <= V_LIMITE)
 V_LIMITE = 90.0                      # limite de vitesse du tronçon [km/h]
-D = 4                                # degré du polynôme
+D = 6                                # degré du polynôme
 A_MAX_G = 0.3                        # accélération maximale autorisée [g] (voiture normale : 0,1 à 0,3 g)
 COEFS_LIBRES = None                  # None = calcul automatique ; ou une liste [c2, ..., cd] (D-1 valeurs) à la main
 LOI = "normale"                      # loi du bruit
 ALPHA1, ALPHA2 = 2.0, 8.0            # plage des sigma_i [km/h] : 99,7 % des sigma_i entre ALPHA1 et ALPHA2 (les autres ramenés aux bornes)
-N_POINTS = 1000                       # nombre de points mesurés
+N_POINTS = 100000                       # nombre de points mesurés
 GRAINE = None                        # None = aléatoire à chaque lancement (la graine utilisée est affichée) ; un entier (ex. 42) = toujours les mêmes données
 AFFICHER = True                      # True : ouvre la fenêtre du graphique ; False : sauvegarde seulement
 
