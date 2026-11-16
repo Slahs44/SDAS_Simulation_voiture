@@ -7,17 +7,18 @@ Ce document explique, avec les valeurs par défaut de `main_03_simulation.py`
 
 ### Modélisation du problème
 
-On considère plusieurs véhicules indicés par $i$, et pour chacun $N$ tirages indicés par $j \in \{1, \dots, N\}$.
+On considère $N$ véhicules indicés par $i \in \{1, \dots, N\}$. Chaque véhicule envoie **un seul point** : les $N$ points
+sont donc indépendants (choix validé avec le professeur, voir `formulation.md`).
 
 - $P$ est le polynôme de vitesse : la **vraie** vitesse en fonction de la position, sans bruit (section 1).
 - $\sigma_i$ est l'écart-type du bruit propre au véhicule $i$ ($\sigma_i^2$ est sa variance), tiré aléatoirement selon une loi normale bornée à $[\alpha_1, \alpha_2]$ (voir ci-dessous).
-- $x_{ij}$ est la position du véhicule $i$ issue du tirage $j$ sur $N$.
-- $v_{ij}$ est la vitesse mesurée du véhicule $i$ issue du tirage $j$ sur $N$ :
+- $x_i$ est la position à laquelle le véhicule $i$ envoie son point.
+- $v_i$ est la vitesse mesurée du véhicule $i$ :
 
 $$
-v_{ij} = P(x_{ij}) + b_{ij},
+v_i = P(x_i) + b_i,
 \qquad
-b_{ij} \sim \mathcal{N}\left(0,\ \sigma_{i}^2\right)
+b_i \sim \mathcal{N}\left(0,\ \sigma_i^2\right)
 $$
 
 ### Tirage de l'écart-type $\sigma_i$
@@ -48,16 +49,18 @@ S_i & \text{si } \alpha_1 \le S_i \le \alpha_2 \\
 $$
 
 On a donc toujours $\sigma_i \in [\alpha_1, \alpha_2]$. En particulier $\sigma_i > 0$ dès que $\alpha_1 > 0$, ce qui garantit
-un écart-type valide. Conséquence : $\sigma_i$ vaut exactement $\alpha_1$ (ou exactement $\alpha_2$) avec une probabilité
-d'environ 0,13 %.
+un écart-type valide (le code accepte aussi $\alpha_1 = 0$, ce qui autorise $\sigma_i = 0$). Conséquence : $\sigma_i$ vaut
+exactement $\alpha_1$ (ou exactement $\alpha_2$) avec une probabilité d'environ 0,13 %.
+
+> **Dans le code** : `Noise("normale", sigma_range=(alpha1, alpha2))`, détails en section 2.
 
 ### Schéma
 
 $$
 \begin{array}{lcl}
 P(x) \ \text{(vraie vitesse, sans bruit)} & \searrow & \\[6pt]
-x_{ij} \sim \mathcal{U}\left([0, L]\right) & \longrightarrow & v_{ij} = P(x_{ij}) + b_{ij} \ \longrightarrow\ \left(x_{ij}, v_{ij}\right)_{i,\,j} \ \text{(ce que le système reçoit)} \\[6pt]
-b_{ij} \sim \mathcal{N}\left(0, \sigma_i^2\right),\ \ \sigma_i \in [\alpha_1, \alpha_2] & \nearrow &
+x_i \sim \mathcal{U}\left([0, L]\right) & \longrightarrow & v_i = P(x_i) + b_i \ \longrightarrow\ \left(x_i, v_i\right)_{1 \le i \le N} \ \text{(ce que le système reçoit)} \\[6pt]
+b_i \sim \mathcal{N}\left(0, \sigma_i^2\right),\ \ \sigma_i \in [\alpha_1, \alpha_2] & \nearrow &
 \end{array}
 $$
 
@@ -162,21 +165,20 @@ vraie courbe de moins de 5 km/h, et 95 % de moins de 10 km/h. ($\sigma$ est l'**
 **Variante — un écart-type $\sigma_i$ par voiture** (`Noise("normale", sigma_range=(alpha1, alpha2))`)
 
 On suppose un point par voiture, donc des points indépendants, et chaque voiture a son propre capteur, plus ou
-moins précis. Pour chaque point $i$ :
+moins précis. Pour chaque point $i$ (formules complètes en section 0, « Tirage de l'écart-type $\sigma_i$ ») :
 
-1. on tire son écart-type selon une loi normale qui met 99,7 % des valeurs entre $\alpha_1$ et $\alpha_2$
-   (règle des 3 sigma : entre $\alpha_1$ et $\alpha_2$ il y a 6 écarts-types) :
-   $$\sigma_i \sim \mathcal{N}\left(\mu_\sigma, s^2\right), \qquad \mu_\sigma = \frac{\alpha_1 + \alpha_2}{2}, \qquad s = \frac{\alpha_2 - \alpha_1}{6}$$
-2. les rares $\sigma_i$ (environ 0,3 %) qui sortent de $[\alpha_1, \alpha_2]$ sont ramenés à la borne la plus proche ;
-   comme $\alpha_1 \ge 0$, un $\sigma_i$ n'est jamais négatif ;
-3. on tire le bruit du point : $\varepsilon_i \sim \mathcal{N}(0, \sigma_i^2)$.
+1. on tire $S_i \sim \mathcal{N}(\mu, s^2)$ avec $\mu = \frac{\alpha_1 + \alpha_2}{2}$ et $s = \frac{\alpha_2 - \alpha_1}{6}$
+   (règle des 3 sigma : 99,7 % des valeurs entre $\alpha_1$ et $\alpha_2$) ;
+2. les rares valeurs (environ 0,3 %) qui sortent de $[\alpha_1, \alpha_2]$ sont ramenées à la borne la plus proche :
+   $\sigma_i = \min(\max(S_i, \alpha_1), \alpha_2)$ ;
+3. on tire le bruit du point : $\varepsilon_i \sim \mathcal{N}(0, \sigma_i^2)$ (noté $b_i$ en section 0).
 
 ```python
 sigmas = np.clip(rng.normal(moyenne, ecart_type, n), alpha1, alpha2)   # Noise.sample_sigmas
 bruit = rng.normal(0.0, sigmas)                                        # Noise.sample
 ```
 
-Exemple avec $\alpha_1 = 2$ et $\alpha_2 = 8$ km/h : $\mu_\sigma = 5$ km/h et $s = 1$ km/h. Les $\sigma_i$ tirés sont
+Exemple avec $\alpha_1 = 2$ et $\alpha_2 = 8$ km/h : $\mu = 5$ km/h et $s = 1$ km/h. Les $\sigma_i$ tirés sont
 dans `bruit.last_sigmas`, et `python src/vitesse/noise.py` vérifie ces chiffres sur 100 000 voitures.
 
 À savoir : le maximum de vraisemblance suppose un seul $\sigma$ pour tous les points. Avec des $\sigma_i$ variables il
