@@ -32,6 +32,9 @@ python tests/mains/main_02_bruit.py         # le bruit seul : histogramme des si
 python tests/mains/main_03_simulation.py    # polynôme + bruit = points mesurés (couleur = sigma_i de la voiture)
 python tests/mains/main_04_maximum_vraisemblance.py   # retrouver v(x) par maximum de vraisemblance
 python tests/mains/main_05_comparaison_estimateurs.py # les 2 estimateurs (sigma constant / sigma_i connus) sur un même graphe
+python tests/mains/main_06_etude_base.py           # base canonique vs Legendre : nuages des coefficients estimés (c_i, c_j), ellipses de la BCR, corrélations
+python tests/mains/main_07_monte_carlo_estimateurs.py # main 5 répété N_C fois (une graine par nuage) : moyenne, variance des 2 estimateurs vs BCR
+python tests/mains/main_08_bcr_selon_degre.py      # pour chaque degré d de 2 à D_MAX : N_C nuages, variance des 2 estimateurs vs BCR en fonction de d
 python src/vitesse/noise.py                 # vérification du sigma variable par voiture (règle des 3 sigma)
 ```
 Chaque main (et chaque test) commence par une section **PARAMETRES** : c'est là qu'on change les valeurs.

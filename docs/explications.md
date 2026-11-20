@@ -402,7 +402,7 @@ Les deux méthodes partent de la log-vraisemblance de 5.5. Elles ne diffèrent q
 
 | Méthode | `estimator` | Ce qu'on sait des $\sigma_i$ | Inconnues | Section |
 |---|---|---|---|---|
-| 1 | `"sigma_constant"` (défaut, TP2) | $\forall i,\ \sigma_i = \sigma_c$, avec $\sigma_c$ inconnu | $\mathbf c$ et $\sigma_c$ | 5.7 |
+| 1 | `"sigma_constant"` (défaut, TP2) | $\forall i,\ \sigma_i = \sigma_c$, avec $\sigma_c$ inconnu (non estimé) | $\mathbf c$ | 5.7 |
 | 2 | `"sigma_variable"` | chaque $\sigma_i$ est différent et **connu** | $\mathbf c$ | 5.8 |
 
 Pour chaque méthode, on suit les mêmes étapes :
@@ -541,14 +541,151 @@ La méthode 1 est un cas particulier de la méthode 2.
 | | Méthode 1 `"sigma_constant"` | Méthode 2 `"sigma_variable"` |
 |---|---|---|
 | Données | $(x_i, v_i)$ | $(x_i, v_i, \sigma_i)$ |
-| Log-vraisemblance | $\ell(\mathbf v \mid \mathbf c, \sigma_c)$ | $\ell(\mathbf v \mid \mathbf c)$ |
+| Log-vraisemblance | $\ell(\mathbf v \mid \mathbf c)$ avec $\sigma_i = \sigma_c$ | $\ell(\mathbf v \mid \mathbf c)$ avec les $\sigma_i$ |
 | Poids du point $i$ | $1$ | $1/\sigma_i^2$ |
 | Estimateur | $\hat{\mathbf c} = \mathbf M^{-1}\mathbf w$ (moindres carrés ordinaires) | $\hat{\mathbf c} = \tilde{\mathbf M}^{-1}\tilde{\mathbf w}$ (moindres carrés pondérés) |
 
 Si tous les $\sigma_i$ sont égaux, les deux méthodes donnent le même $\hat{\mathbf c}$ (les poids se simplifient ;
 vérifié par `test_equal_sigmas_give_the_same_estimate_as_sigma_constant`).
 
-### 5.10 Pourquoi la base de Legendre ?
+### 5.10 Caractérisation des estimateurs : borne de Cramér-Rao (BCR)
+
+Les sections 5.7 et 5.8 donnent $\hat{\mathbf c}$ pour **un** échantillon $\mathbf v$. Mais $\mathbf v$ est aléatoire
+(à cause des bruits $b_i$), donc $\hat{\mathbf c}$ l'est aussi : en refaisant l'expérience avec d'autres voitures, on
+obtiendrait d'autres coefficients. Pour caractériser un estimateur, on regarde donc sa loi, à travers :
+
+- son **biais** $\langle\hat{\mathbf c}\rangle - \mathbf c^*$ ($\langle\cdot\rangle$ : espérance sur les bruits, à positions
+  $\mathbf x$ fixées) ;
+- sa **covariance** $\mathrm{Cov}(\hat{\mathbf c}) = \big\langle(\hat{\mathbf c} - \langle\hat{\mathbf c}\rangle)(\hat{\mathbf c} - \langle\hat{\mathbf c}\rangle)^\top\big\rangle$,
+  une matrice $(d+1) \times (d+1)$ : sa diagonale contient les variances $\mathrm{Var}(\hat c_n)$.
+
+La **borne de Cramér-Rao** est la plus petite covariance possible pour un estimateur **sans biais** de $\mathbf c$ :
+
+$$
+\mathrm{Cov}(\hat{\mathbf c}) \succeq \mathrm{BCR} = \mathbf I_F^{-1}
+\qquad\text{en particulier}\qquad
+\mathrm{Var}(\hat c_n) \ge \mathrm{BCR}_{nn} \quad n = 0, \dots, d
+$$
+
+($\mathbf A \succeq \mathbf B$ signifie que $\mathbf A - \mathbf B$ est une matrice positive.) Un estimateur sans biais
+qui atteint la borne est dit **efficace** : aucun autre estimateur sans biais ne fait mieux.
+
+#### 5.10.1 Information de Fisher
+
+L'information de Fisher est l'opposé de l'espérance de la hessienne de la log-vraisemblance :
+
+$$
+[\mathbf I_F]_{nm} = -\big\langle \partial_{c_n}\partial_{c_m}\ell(\mathbf v \mid \mathbf c)\big\rangle
+$$
+
+On part de la dérivée première de 5.8 et on dérive une seconde fois par rapport à $c_m$. Seul $\mu_i(\mathbf c)$ dépend
+de $c_m$, avec $\partial_{c_m}\mu_i = P_m(x_i)$ :
+
+$$
+\partial_{c_m}\partial_{c_n}\ell(\mathbf v \mid \mathbf c) = -\sum_{i=1}^{N}\frac{P_n(x_i)\,P_m(x_i)}{\sigma_i^2} = -\tilde M_{nm}
+$$
+
+Cette dérivée seconde **ne dépend pas de $\mathbf v$** (le modèle est linéaire en $\mathbf c$) : l'espérance ne change
+rien, et elle ne dépend pas non plus de $\mathbf c^*$. D'où, pour chaque méthode :
+
+| | Méthode 1 `"sigma_constant"` ($\sigma_i = \sigma_c$) | Méthode 2 `"sigma_variable"` |
+|---|---|---|
+| Information de Fisher | $\mathbf I_F = \dfrac{\mathbf M}{\sigma_c^2}$ | $\mathbf I_F = \tilde{\mathbf M} = \mathbf P^\top \mathbf W \mathbf P$ |
+| BCR | $\boxed{\mathrm{BCR} = \sigma_c^2\,\mathbf M^{-1}}$ | $\boxed{\mathrm{BCR} = \tilde{\mathbf M}^{-1}}$ |
+
+**Attention pour la méthode 1.** $\hat{\mathbf c}$ ne dépend pas de $\sigma_c$, mais la BCR, si : plus le bruit est fort,
+moins l'estimation est précise. Comme on n'estime pas $\sigma_c$, il faut le **donner** pour calculer la borne. En
+simulation, on prend l'écart-type global du bruit simulé, $\sigma_g = \sqrt{\frac{1}{N}\sum_i \sigma_i^2}$ (c'est ce que
+font `main_04` et `main_05`).
+
+#### 5.10.2 Les estimateurs atteignent-ils la borne ?
+
+On écrit les deux estimateurs sous la même forme $\hat{\mathbf c} = \tilde{\mathbf M}^{-1}\mathbf P^\top \mathbf W\,\mathbf v$
+(avec $\mathbf W = \mathbf I$ et $\tilde{\mathbf M} = \mathbf M$ pour la méthode 1), et on remplace
+$\mathbf v = \mathbf P\mathbf c^* + \mathbf b$ :
+
+$$
+\hat{\mathbf c} = \tilde{\mathbf M}^{-1}\mathbf P^\top \mathbf W \mathbf P\,\mathbf c^* + \tilde{\mathbf M}^{-1}\mathbf P^\top \mathbf W\,\mathbf b
+= \mathbf c^* + \tilde{\mathbf M}^{-1}\mathbf P^\top \mathbf W\,\mathbf b
+$$
+
+**Biais.** $\langle\mathbf b\rangle = \mathbf 0$, donc $\langle\hat{\mathbf c}\rangle = \mathbf c^*$ : les **deux** méthodes
+sont sans biais, quels que soient les vrais $\sigma_i$.
+
+**Covariance.** Avec $\boldsymbol\Sigma = \mathrm{Cov}(\mathbf b) = \mathrm{diag}(\sigma_1^2, \dots, \sigma_N^2)$ (les vrais
+écarts-types) :
+
+$$
+\mathrm{Cov}(\hat{\mathbf c}) = \tilde{\mathbf M}^{-1}\mathbf P^\top \mathbf W \boldsymbol\Sigma \mathbf W \mathbf P\,\tilde{\mathbf M}^{-1}
+$$
+
+- **Méthode 2** : $\mathbf W = \boldsymbol\Sigma^{-1}$, donc $\mathbf W\boldsymbol\Sigma\mathbf W = \mathbf W$ et
+  $\mathrm{Cov}(\hat{\mathbf c}) = \tilde{\mathbf M}^{-1}\tilde{\mathbf M}\,\tilde{\mathbf M}^{-1} = \tilde{\mathbf M}^{-1}$ :
+  elle **atteint** sa BCR, elle est efficace.
+- **Méthode 1** : $\mathbf W = \mathbf I$, donc
+  $\mathrm{Cov}(\hat{\mathbf c}) = \mathbf M^{-1}\big(\mathbf P^\top \boldsymbol\Sigma \mathbf P\big)\mathbf M^{-1}$.
+  - Si vraiment $\sigma_i = \sigma_c$ pour tout $i$ : $\boldsymbol\Sigma = \sigma_c^2\mathbf I$ et on trouve
+    $\sigma_c^2\mathbf M^{-1}$ : elle atteint sa BCR.
+  - Dans notre simulation (les $\sigma_i$ diffèrent), son hypothèse est fausse : $\sigma_c^2\mathbf M^{-1}$ n'est
+    qu'une **approximation**, et sa vraie covariance $\mathbf M^{-1}\mathbf P^\top \boldsymbol\Sigma \mathbf P\,\mathbf M^{-1}$
+    est toujours $\succeq \tilde{\mathbf M}^{-1}$. La vraie borne du problème est celle de la méthode 2 : ne pas
+    utiliser les $\sigma_i$ fait perdre de la précision.
+
+#### 5.10.3 Lire la BCR
+
+- **Diagonale** : $\sqrt{\mathrm{BCR}_{nn}}$ est le plus petit écart-type possible sur $\hat c_n$ (en km/h, comme les
+  coefficients).
+- **Hors diagonale** : la covariance entre $\hat c_n$ et $\hat c_m$. On la lit plus facilement sous forme de
+  corrélation $\rho_{nm} = \mathrm{BCR}_{nm} / \sqrt{\mathrm{BCR}_{nn}\mathrm{BCR}_{mm}} \in [-1, 1]$. Si $\rho_{nm}$ est
+  proche de $\pm 1$, les erreurs sur $c_n$ et $c_m$ sont **liées** : l'une compense l'autre (voir 5.11).
+- **Sur la courbe** : la vitesse estimée en $x$ est $\mu(\hat{\mathbf c}) = \mathbf p(x)^\top \hat{\mathbf c}$ avec
+  $\mathbf p(x) = (P_0(x), \dots, P_d(x))^\top$. Sa variance vaut donc au moins
+  $$
+  \mathrm{Var}\big(\mu(\hat{\mathbf c})(x)\big) \ge \mathbf p(x)^\top\,\mathrm{BCR}\;\mathbf p(x)
+  $$
+  Contrairement aux coefficients, ce résultat **ne dépend pas de la base** (canonique ou Legendre).
+
+> **Dans le code** :
+> ```python
+> est.fisher_information(sigma=sigma_c)       # I_F : M / sigma_c²  (méthode 1)  ou  M_tilde  (méthode 2)
+> est.crb(sigma=sigma_c)                      # BCR = I_F^-1
+> np.sqrt(np.diag(est.crb(sigma=sigma_c)))    # écarts-types minimaux des coefficients
+> ```
+> `sigma` est **obligatoire** pour la méthode 1 (sinon `ValueError`, testé par `test_crb_of_sigma_constant_needs_sigma`)
+> et ignoré pour la méthode 2. Les tests Monte-Carlo vérifient que la covariance empirique de $\hat{\mathbf c}$ (2000
+> tirages du bruit aux mêmes positions) vaut la BCR : `test_empirical_covariance_matches_the_crb` (méthode 1, $\sigma$
+> commun) et `test_sigma_variable_reaches_its_crb_and_beats_sigma_constant` (méthode 2, qui fait aussi mieux que la
+> méthode 1 quand les $\sigma_i$ diffèrent).
+
+#### 5.10.4 Exemple (graine 42)
+
+Mêmes données qu'en 5.13 ($L = 2000$ m, $d = 2$, 100 voitures, $\sigma_i \in [2, 8]$ km/h, $\sigma_g = 5{,}08$ km/h,
+utilisé pour la méthode 1). Écarts-types de la BCR, $\sqrt{\mathrm{BCR}_{nn}}$ :
+
+| | canonique, méthode 1 | canonique, méthode 2 | Legendre, méthode 1 | Legendre, méthode 2 |
+|---|---|---|---|---|
+| $c_0$ | 1,58 | 1,50 | 0,51 | 0,47 |
+| $c_1$ | 7,53 | 7,05 | 0,94 | 0,86 |
+| $c_2$ | 7,58 | 6,95 | 1,26 | 1,16 |
+
+La vraie covariance de la méthode 1, $\mathbf M^{-1}\mathbf P^\top \boldsymbol\Sigma \mathbf P\,\mathbf M^{-1}$, donne en
+base canonique les écarts-types $(1{,}58 ;\ 7{,}48 ;\ 7{,}42)$ : plus grands que la borne de la méthode 2. Avec
+$[2, 8]$ km/h, les $\sigma_i$ sont concentrés autour de 5 km/h et le gain de la méthode 2 reste modeste (5 à 8 %). Il
+grandit quand les $\sigma_i$ sont plus dispersés.
+
+Corrélations de la BCR (méthode 2) :
+
+| | canonique | Legendre |
+|---|---|---|
+| $(c_0, c_1)$ | −0,88 | 0,04 |
+| $(c_1, c_2)$ | −0,97 | 0,07 |
+| $(c_0, c_2)$ | 0,77 | 0,11 |
+
+En base canonique, $c_1$ et $c_2$ sont corrélés à −0,97 : une erreur sur $c_1$ est presque compensée par une erreur de
+signe opposé sur $c_2$. En Legendre, les coefficients sont presque décorrélés et leurs écarts-types bien plus petits
+(section suivante).
+
+### 5.11 Pourquoi la base de Legendre ?
 
 En base canonique, les colonnes $1, \xi, \xi^2, \dots$ se ressemblent beaucoup sur $[0, 1]$ (elles sont toutes
 croissantes) : $\mathbf M$ a de grands termes hors diagonale. Les coefficients estimés se **compensent** alors : une
@@ -562,7 +699,7 @@ Changer de base ne change **pas** la courbe estimée $\mu(\hat{\mathbf c})$ (les
 polynômes, vérifié par `test_legendre_basis_gives_the_same_curve_as_canonical`). Seuls les **coefficients** et leur
 interprétation changent. La quasi-orthogonalité est perdue si les $x_i$ ne sont plus uniformes sur le tronçon.
 
-### 5.11 La classe `MaximumLikelihood`
+### 5.12 La classe `MaximumLikelihood`
 
 ```python
 est = MaximumLikelihood(length=2000, degree=2, basis="canonique", estimator="sigma_constant")
@@ -570,10 +707,11 @@ est.fit(x, v)                                   # méthode 1 (défaut, TP2)
 #   ou : MaximumLikelihood(2000, 2, estimator="sigma_variable").fit(x, v, sigmas=bruit.last_sigmas)   # méthode 2
 est.coefficients                # [c0, ..., c_d] estimés DANS LA BASE CHOISIE
 est.canonical_coefficients      # convertis en base canonique (comparables à SpeedPolynomial)
-est.sigma                       # méthode 1 : sigma_c chapeau [km/h] ; sinon None
 est.sigmas                      # méthode 2 : les sigma_i utilisés
 est.M, est.w                    # M, w (méthode 1) ou M_tilde, w_tilde (méthode 2)
 est.speed(1000)                 # vitesse estimée en x = 1000 m
+est.fisher_information(sigma=5) # I_F (5.10) ; sigma obligatoire pour la méthode 1, ignoré pour la méthode 2
+est.crb(sigma=5)                # BCR = I_F^-1 (5.10)
 ```
 
 - **`__init__`** : mémorise $L$, $d$, la base et la méthode ; refuse $L \le 0$, $d < 1$, une base ou une méthode
@@ -587,29 +725,27 @@ est.speed(1000)                 # vitesse estimée en x = 1000 m
      ($\mathbf W = \mathbf I$ pour la méthode 1), rangés dans `est.M` et `est.w` ;
   4. résout le système avec `np.linalg.solve` (même résultat que d'inverser la matrice, mais plus précis
      numériquement) ;
-  5. méthode 1 seulement : $\hat\sigma_c = \sqrt{\text{moyenne des résidus}^2}$ ;
-  6. renvoie `self`, ce qui permet d'écrire `MaximumLikelihood(L, d).fit(x, v)` en une ligne.
+  5. renvoie `self`, ce qui permet d'écrire `MaximumLikelihood(L, d).fit(x, v)` en une ligne.
 - **`canonical_coefficients`** : pour Legendre, convertit $\sum c_n \mathrm{Leg}_n(t)$ en polynôme en $t$, puis
   remplace $t$ par $2\xi - 1$.
 - **`speed(x)`** : renvoie $\mu(\hat{\mathbf c})$ en $x$ ; lève une erreur si `fit` n'a pas été appelé.
 
-### 5.12 Exemple chiffré (graine 42)
+### 5.13 Exemple chiffré (graine 42)
 
 Paramètres du début du document : $L = 2000$ m, $V_0 = 70$, $V_L = 80$, $d = 2$, 100 voitures, graine 42,
 $\sigma_i$ tirés dans $[2, 8]$ km/h (on obtient des $\sigma_i$ entre 2,87 et 7,91 km/h, $\sqrt{\text{moyenne des } \sigma_i^2} = 5{,}08$ km/h).
 Estimation avec le bon degré, coefficients en base canonique :
 
-| | $c_0$ | $c_1$ | $c_2$ | $\hat\sigma_c$ |
-|---|---|---|---|---|
-| vrai $\mathbf c^*$ | 70,00 | 68,29 | −58,29 | |
-| méthode 1 `"sigma_constant"` | 71,71 | 62,43 | −55,35 | 5,05 |
-| méthode 2 `"sigma_variable"` | 71,10 | 65,79 | −58,70 | — |
+| | $c_0$ | $c_1$ | $c_2$ |
+|---|---|---|---|
+| vrai $\mathbf c^*$ | 70,00 | 68,29 | −58,29 |
+| méthode 1 `"sigma_constant"` | 71,71 | 62,43 | −55,35 |
+| méthode 2 `"sigma_variable"` | 71,10 | 65,79 | −58,70 |
 
-$\hat\sigma_c = 5{,}05$ km/h est proche de $\sqrt{\text{moyenne des } \sigma_i^2} = 5{,}08$ km/h : comme annoncé en 5.7,
-la méthode 1 estime la moyenne des $\sigma_i^2$. Les vrais coefficients en base de Legendre sont
-$(84{,}71 ;\ 5{,}00 ;\ -9{,}71)$.
+Les vrais coefficients en base de Legendre sont $(84{,}71 ;\ 5{,}00 ;\ -9{,}71)$. La précision de ces estimations
+(BCR) est donnée en 5.10.4.
 
-### 5.13 Limites à connaître
+### 5.14 Limites à connaître
 
 - **Bruit non gaussien** (autre loi, valeurs aberrantes) : la log-vraisemblance de 5.5 n'est plus la bonne, et les moindres carrés deviennent sensibles aux points aberrants (le TP2, section 2, traite le cas Poisson
   avec un algorithme itératif).
@@ -642,5 +778,6 @@ $(84{,}71 ;\ 5{,}00 ;\ -9{,}71)$.
 | Matrice $\mathbf P_{i,n} = P_n(x_i)$ (canonique / Legendre) | `src/vitesse/maximum_likelihood.py` | `basis_matrix` |
 | Log-vraisemblance (méthodes 1 et 2) | `src/vitesse/maximum_likelihood.py` | `log_likelihood` |
 | Estimer $\hat{\mathbf c}$ (méthodes 1 et 2) | `src/vitesse/maximum_likelihood.py` | `MaximumLikelihood.fit`, `.speed` |
+| Caractériser : information de Fisher, BCR | `src/vitesse/maximum_likelihood.py` | `MaximumLikelihood.fisher_information`, `.crb` |
 | Simuler puis estimer | `tests/mains/main_04_maximum_vraisemblance.py` | `main()` |
 | Comparer les deux méthodes sur un même graphe | `tests/mains/main_05_comparaison_estimateurs.py` | `main()` |
