@@ -2,8 +2,6 @@
 
 Ce document explique la génération sur un petit exemple : $L = 2000$ m, $V_0 = 70$ km/h, $V_L = 80$ km/h,
 limite 90 km/h, degré $d = 2$, écarts-types $\sigma_i \in [\alpha_1, \alpha_2] = [2, 8]$ km/h, 100 points (= 100 voitures).
-(Les valeurs par défaut de `main_03_simulation.py` sont différentes : $L = 1500$ m, $V_0 = 40$, $V_L = 35$ km/h,
-$d = 4$, 1000 points ; même plage $[2, 8]$ km/h.)
 
 ## 0. Vue d'ensemble
  
@@ -12,16 +10,25 @@ $d = 4$, 1000 points ; même plage $[2, 8]$ km/h.)
 On considère $N$ véhicules indicés par $i \in \{1, \dots, N\}$. Chaque véhicule envoie **un seul point** : les $N$ points
 sont donc indépendants (choix validé avec le professeur, voir `formulation.md`).
 
-- $P$ est le polynôme de vitesse : la **vraie** vitesse en fonction de la position, sans bruit (section 1).
+- $P$ est le polynôme de vitesse : la **vraie** vitesse en fonction de la position (sans bruit) (section 1).
 - $\sigma_i$ est l'écart-type du bruit propre au véhicule $i$ ($\sigma_i^2$ est sa variance), tiré aléatoirement selon une loi normale bornée à $[\alpha_1, \alpha_2]$ (voir ci-dessous).
-- $x_i$ est la position à laquelle le véhicule $i$ envoie son point.
-- $v_i$ est la vitesse mesurée du véhicule $i$ :
+- $x_i$ est la position du véhicule $i$.
+- $v_i$ est la vitesse mesurée du véhicule $i$ : la vraie vitesse plus un bruit $b_i$ propre au véhicule,
 
 $$
 v_i = P(x_i) + b_i,
 \qquad
-b_i \sim \mathcal{N}\left(0,\ \sigma_i^2\right)
+b_i \sim \mathcal{N}\!\left(0,\ \sigma_i^2\right),
+\qquad
+b_1, \dots, b_N \ \text{indépendants}.
 $$
+
+De façon équivalente, chaque mesure est elle-même une variable aléatoire gaussienne, centrée sur la vraie vitesse :
+
+$$
+v_i \sim \mathcal{N}\!\left(P(x_i),\ \sigma_i^2\right).
+$$
+
 
 ### Tirage de l'écart-type $\sigma_i$
 
@@ -73,17 +80,30 @@ Ce cas simple sert de référence et pour les tests (par exemple $\sigma = 0$ : 
 
 ### Schéma
 
+Pour chaque véhicule $i$ :
+
 $$
-\begin{array}{lcl}
-P(x) \ \text{(vraie vitesse, sans bruit)} & \searrow & \\[6pt]
-x_i \sim \mathcal{U}\left([0, L]\right) & \longrightarrow & v_i = P(x_i) + b_i \ \longrightarrow\ \left(x_i, v_i\right)_{1 \le i \le N} \ \text{(ce que le système reçoit)} \\[6pt]
-b_i \sim \mathcal{N}\left(0, \sigma_i^2\right),\ \ \sigma_i \in [\alpha_1, \alpha_2] & \nearrow &
+\begin{array}{ccc}
+S_i \sim \mathcal{N}(\mu, s^2) & & \\[2pt]
+\big\downarrow \scriptstyle{\text{ borné}} & & \\[2pt]
+\sigma_i \in [\alpha_1, \alpha_2] & & x_i \sim \mathcal{U}([0, L]) \\[2pt]
+\big\downarrow & & \big\downarrow \\[2pt]
+b_i \sim \mathcal{N}(0, \sigma_i^2) & & P(x_i) \\[2pt]
+\searrow & & \swarrow \\[2pt]
+ & v_i = P(x_i) + b_i & \\[2pt]
+ & \big\downarrow & \\[2pt]
+ & (x_i,\ v_i) &
 \end{array}
 $$
 
-Un seul « générateur aléatoire » (`rng`) fournit tous les nombres au hasard : d'abord les 100 positions,
-ensuite les 100 écarts-types $\sigma_i$, enfin les 100 valeurs de bruit. Ce générateur est entièrement déterminé
-par un nombre : **la graine** (section 3).
+- **Le bruit** : on tire $S_i$ avec $\mu = \frac{\alpha_1 + \alpha_2}{2}$ et $s = \frac{\alpha_2 - \alpha_1}{6}$.
+  On le ramène dans $[\alpha_1, \alpha_2]$ pour obtenir $\sigma_i$, puis on tire le bruit $b_i$ avec cet écart-type.
+- **La vraie vitesse** : on tire une position $x_i$, puis on calcule $P(x_i)$ (sans bruit).
+- **Sortie** : le système ne reçoit que le couple $(x_i, v_i)$. L'estimateur `"sigma_variable"` suppose en plus
+  que chaque $\sigma_i$ est différent (section 5).
+
+Un seul « générateur aléatoire » (`rng`) fournit tous les nombres au hasard. Ce générateur est entièrement déterminé
+par un nombre : la graine (section 3).
 
 ---
 
@@ -110,24 +130,8 @@ $$
 Un polynôme de degré $d$ a $d+1$ coefficients, on en a fixé 2 ($c_0$ et $c_1$) : il reste
 **$d - 1$ coefficients libres** $c_2, \dots, c_d$.
 
-| Degré $d$ | Coefficients libres | Forme |
-|---|---|---|
-| 1 | aucun | droite de $V_0$ à $V_L$ |
-| 2 | $c_2$ | parabole |
-| 3 | $c_2$, $c_3$ | cubique |
 
-### 1.4 Exemple chiffré ($d = 2$)
-
-Avec $V_0 = 70$, $V_L = 80$ et $c_2 = -58{,}29$ :
-
-- $c_0 = 70$
-- $c_1 = 80 - 70 - (-58{,}29) = 68{,}29$
-- donc $v(\xi) = 70 + 68{,}29\,\xi - 58{,}29\,\xi^2$
-
-Vérifications : $v(0) = 70$ ✔ ; $v(1) = 70 + 68{,}29 - 58{,}29 = 80$ ✔ ;
-au milieu du tronçon $v(0{,}5) = 70 + 34{,}14 - 14{,}57 = 89{,}57$ km/h.
-
-### 1.5 Comment $c_2, \dots, c_d$ sont choisis
+### 1.4 Comment $c_2, \dots, c_d$ sont choisis
 
 - **À la main** : `SpeedPolynomial(2000, 70, 80, 2, free_coefficients=[-58.29])`.
 - **Automatiquement** (par défaut, si on donne `speed_limit`) : on cherche les coefficients libres qui
@@ -138,9 +142,9 @@ au milieu du tronçon $v(0{,}5) = 70 + 34{,}14 - 14{,}57 = 89{,}57$ km/h.
   L'accélération du véhicule est $a = \dfrac{dv}{dt} = v \cdot \dfrac{dv}{dx}$ (à convertir en m/s²).
   La recherche est faite par `scipy.optimize.minimize` ; s'il n'existe aucun polynôme qui respecte les contraintes,
   une erreur le dit.
-  Pour $d = 2$ on obtient $c_2 = -58{,}29$, soit exactement l'exemple ci-dessus (pic de 90 km/h vers $x = 1171$ m).
+  
 
-### 1.6 Calculer la vitesse en un point
+### 1.5 Calculer la vitesse en un point
 
 Une fois $[c_0, \dots, c_d]$ connus, `speed(x)` fait :
 
@@ -153,9 +157,9 @@ for j, cj in enumerate(c):           # on ajoute chaque terme  cj · ξ^j
 
 ---
 
-## 2. Générer un point $(x, v(x))$ : loi uniforme, puis polynôme + bruit
+## 2. Générer un point $(x, v(x))$
 
-Pour **chaque** point $k = 1, \dots, 100$ :
+Pour chaque point $k = 1, \dots, N$ :
 
 **Étape 1 — la position $x_k$ : loi uniforme sur $[0, L]$**
 
@@ -163,9 +167,7 @@ Pour **chaque** point $k = 1, \dots, 100$ :
 x = rng.uniform(0.0, length, n_points)       # generate_positions
 ```
 
-« Uniforme » : tous les endroits du tronçon ont la même chance, un intervalle de 100 m a deux fois plus de chances
-qu'un intervalle de 50 m. Les 100 positions sont tirées **indépendamment** : par hasard on aura des endroits avec
-beaucoup de points et d'autres avec peu.
+
 
 **Étape 2 — la vraie vitesse en ce point**
 
@@ -199,19 +201,13 @@ $$v_k = v(x_k) + \varepsilon_k$$
 return polynomial.speed(x) + noise.sample(len(x))     # simulate_speeds
 ```
 
-### Exemple avec la graine 42 (les 3 premiers points)
 
-| $k$ | $x_k$ (m) | $\xi_k$ | $v(x_k)$ vraie | $\sigma_k$ | $\varepsilon_k$ | $v_k$ mesurée |
-|---|---|---|---|---|---|---|
-| 1 | 1547,9 | 0,7740 | 87,94 | 5,40 | −0,03 | **87,91** |
-| 2 | 877,8 | 0,4389 | 88,74 | 4,09 | −0,67 | **88,07** |
-| 3 | 1717,2 | 0,8586 | 85,66 | 4,62 | +1,56 | **87,22** |
 
 Les points $(x_k, v_k)$ sont ce que « reçoit » le système ; la vraie courbe $v(x)$ est ce qu'on cherchera à retrouver.
 Les $\sigma_k$, eux, ne sont **pas** connus du système : il ne voit que les vitesses mesurées.
 
-> **Ordre des tirages.** Les 100 positions sont tirées d'abord, puis les 100 écarts-types $\sigma_k$, puis les
-> 100 valeurs de bruit : le générateur `rng` fournit ses nombres les uns après les autres, comme on pioche dans
+> **Ordre des tirages.** Les $N$ positions sont tirées d'abord, puis les $N$ écarts-types $\sigma_k$, puis les
+> $N$ valeurs de bruit : le générateur `rng` fournit ses nombres les uns après les autres, comme on pioche dans
 > un paquet de cartes. Le bruit du point 1 est donc le 1er nombre du *troisième* lot, pas le 1er nombre du programme.
 
 ---
@@ -293,274 +289,445 @@ Le titre de la figure contient aussi la graine, donc une image sauvegardée « s
 ## 5. Retrouver le polynôme : le maximum de vraisemblance (`maximum_likelihood.py`)
 
 Les sections 1 à 4 fabriquent les mesures $(x_i, v_i)$ à partir d'un polynôme **connu**. Ici on fait le chemin
-inverse : on ne garde **que** les mesures et le degré $d$, et on cherche les coefficients $\hat c_0, \dots, \hat c_d$.
-Le code reprend la méthode du **TP2 (section 1, bruit blanc gaussien)** : on annule le gradient de la
-log-vraisemblance, ce qui donne $\hat{\mathbf c} = \mathbf M^{-1}\mathbf w$, puis on calcule l'information de Fisher
-et la borne de Cramér-Rao.
+inverse : on ne garde que les mesures et le degré, et on cherche les coefficients. On reprend la méthode du
+**TP2 (section 1, bruit blanc gaussien)** : on annule le gradient de la log-vraisemblance, ce qui donne un
+système linéaire.
 
 Le TP2 suppose un **même** écart-type $\sigma$ pour toutes les mesures. Ce n'est pas notre modèle (section 0) :
-chaque voiture $i$ a son propre $\sigma_i$. On a donc refait le calcul avec des $\sigma_i$ différents, et le code
-propose **deux estimateurs** au choix (paramètre `estimator`) :
+chaque voiture $i$ a son propre $\sigma_i$. On écrit donc la log-vraisemblance avec des $\sigma_i$ différents
+(5.1 à 5.5), puis on en déduit **trois méthodes** (paramètre `estimator`), détaillées une par une en 5.6 à 5.9 :
 
-| `estimator` | Hypothèse | Ce qu'on connaît | Ce qu'on estime |
-|---|---|---|---|
-| `"sigma_constant"` (défaut) | $\forall i,\ \sigma_i = \sigma$ (TP2) | $x_i, v_i$ | $\hat{\mathbf c}$ et $\hat\sigma$ |
-| `"sigma_variable"` | un $\sigma_i$ par voiture | $x_i, v_i$ et les $\sigma_i$ | $\hat{\mathbf c}$ |
+| Méthode | `estimator` | Hypothèse | Ce qu'on connaît | Ce qu'on estime | Section |
+|---|---|---|---|---|---|
+| 1 | `"sigma_constant"` (défaut) | $\forall i,\ \sigma_i = \sigma_c$ (TP2) | $x_i, v_i$ | $\hat{\mathbf c}$ et $\hat\sigma_c$ | 5.7 |
+| 2 | `"sigma_variable"` | un $\sigma_i$ par voiture, connu | $x_i, v_i$ et les $\sigma_i$ | $\hat{\mathbf c}$ | 5.8 |
+| 3 | `"sigma_variable_inconnu"` | un $\sigma_i$ par voiture, inconnu | $x_i, v_i$ et la **loi** des $\sigma_i$ ($\alpha_1, \alpha_2$) | $\hat{\mathbf c}$ | 5.9 |
 
-Notations : $d$ est le degré (noté $n_0$ dans le TP). Le TP écrit le polynôme dans une base quelconque
-$P_n(x)$ ; on prend ici la base canonique $P_n(x) = x^n$, donc $P_n(x_i) = x_i^n$.
+> **Dans le code**, les positions sont normalisées avant de calculer les $P_n(x_i)$, pour éviter des nombres
+> énormes comme $2000^6$ : en base canonique $P_n(x) = \xi^n$ avec $\xi = x / L \in [0, 1]$ (section 1.1), en base
+> de Legendre $P_n(x) = \mathrm{Leg}_n(t)$ avec $t = 2x/L - 1 \in [-1, 1]$ (section 5.11). Les formules ci-dessous
+> sont valables pour n'importe quelle base.
 
-> **Dans le code**, $x_i$ désigne la position normalisée $\xi_i = x_i / L \in [0, 1]$ (section 1.1), pour éviter
-> des nombres énormes comme $2000^6$. Le code propose aussi la base de Legendre (`basis="legendre"`), où $x_i^n$
-> est remplacé par $\mathrm{Leg}_n(t_i)$ avec $t_i = 2x_i/L - 1 \in [-1, 1]$ (section 5.6). Toutes les formules
-> ci-dessous restent vraies en remplaçant $x_i^n$ par $P_n(x_i)$.
+### 5.1 Notations
 
-### 5.1 Le modèle
+$\forall \ i\in [1,N]$
+| Symbole | Signification |
+|---|---|
+| $N$ | nombre de véhicules|
+| $x_i$ | position du véhicule $i$|
+| $v_i$ | vitesse mesurée par le véhicule $i$ |
+| $\mathbf v = (v_1, \dots, v_N)^\top$ | l'échantillon : toutes les vitesses mesurées (le $\chi$ du TP) |
+| $\mathbf x = (x_1, \dots, x_N)^\top$ | toutes les positions |
+| $d$ | degré du polynôme|
+| $P_0, \dots, P_{d}$ | la base de polynômes (canonique ou Legendre) |
+| $\mathbf c = (c_0, \dots, c_{d})^\top$ | coefficients |
+| $\hat{\mathbf c} = (c_0, \dots, c_{d})^\top$ | coefficients estimés |
+| $\mathbf c^*$ | **"vrais"** coefficients, fixes et inconnus |
+| $\sigma_i$ | écart-type du bruit du capteur du véhicule $i$ |
+
+On note aussi $\mu_i(\hat{\mathbf c} )$ la vitesse que le polynôme de coefficients $\hat{\mathbf c} $ prédit en $x_i$ :
 
 $$
-v_i = \sum_{n=0}^{d} c_n\, x_i^n + b_i,
+\forall \ i\in [1,N] \quad \mu_i({\mathbf c} ) = \sum_{n=0}^{d} c_n P_n(x_i)
+$$
+
+### 5.2 Le modèle
+
+Les mesures sont produites par les vrais coefficients :
+
+$$
+v_i = \mu_i(\mathbf c^*) + b_i,
 \qquad
-b_i \sim \mathcal{N}(0, \sigma_i^2),
+b_i \sim \mathcal N(0, \sigma_i^2),
 \qquad
-\text{les } b_i \text{ indépendants}
+b_1, \dots, b_N \text{ indépendants}
 $$
 
-Les $d + 1$ coefficients sont estimés **librement** : on ne suppose pas connus $V_0$ et $V_L$ (en vrai on ne les
-connaît pas). Il n'y a donc pas les contraintes $c_0 = V_0$, etc. de la section 1.3.
+Les bruits sont indépendants parce que chaque véhicule envoie un seul point avec son propre capteur.
+Les $d + 1$ coefficients sont estimés **librement** : on ne suppose pas connus $V_0$ et $V_L$.
 
-### 5.2 La log-vraisemblance
+### 5.3 La loi d'une mesure
 
-Les points étant indépendants (un point par véhicule, section 0), on multiplie les densités normales de chaque
-point ; en passant au logarithme, le produit devient une somme :
-
-$$
-\ell(\mathbf c)
-= -\sum_{i=1}^{N} \frac{1}{2\sigma_i^2} \left[ v_i - \sum_{n=0}^{d} c_n x_i^n \right]^2
-- \sum_{i=1}^{N} \log\left(\sqrt{2\pi}\,\sigma_i\right)
-$$
-
-Avec $\sigma_i = \sigma$ pour tout $i$, on retrouve la formule du TP2 (section 1.2) :
-$\ell = -\frac{1}{2\sigma^2} \sum_i [\dots]^2 - N \log(\sqrt{2\pi}\,\sigma)$.
-
-> **Dans le code** : `log_likelihood(coefficients, sigma, x, v, length, basis)`, où `sigma` est soit un nombre
-> (même $\sigma$ pour tous), soit un tableau des $\sigma_i$.
-
-### 5.3 L'estimateur : $\hat{\mathbf c} = \mathbf M^{-1} \mathbf w$
-
-**Cas général ($\sigma_i$ différents, estimateur `"sigma_variable"`).** On annule la dérivée par rapport à
-chaque $c_n$ :
+Les positions $x_i$ sont connues. Pour des coefficients $\mathbf c$ donnés, $\mu_i(\mathbf c)$ est donc un nombre
+fixe, et tout le hasard de $v_i$ vient de $b_i$. Ajouter une constante à une gaussienne centrée décale sa moyenne :
 
 $$
-\partial_{c_n} \ell = \sum_{i=1}^{N} \frac{1}{\sigma_i^2}\, x_i^n \left( v_i - \sum_{m=0}^{d} c_m x_i^m \right) = 0
+v_i \sim \mathcal N\big(\mu_i(\mathbf c), \sigma_i^2\big)
 \quad\Longrightarrow\quad
-\sum_{m=0}^{d} c_m \underbrace{\sum_{i=1}^{N} \frac{x_i^n\, x_i^m}{\sigma_i^2}}_{M_{nm}}
-= \underbrace{\sum_{i=1}^{N} \frac{x_i^n\, v_i}{\sigma_i^2}}_{w_n}
+p(v_i \mid \mathbf c) = \frac{1}{\sqrt{2\pi}\,\sigma_i}\exp\!\left(-\frac{\big(v_i - \mu_i(\mathbf c)\big)^2}{2\sigma_i^2}\right)
 $$
 
-Le facteur $1/\sigma_i^2$ ne peut pas sortir de la somme (il dépend de $i$) : il reste **dans** $M_{nm}$ **et**
-dans $w_n$. C'est un système linéaire de $d + 1$ équations, $\mathbf M \mathbf c = \mathbf w$, d'où :
+### 5.4 La vraisemblance
+
+Les mesures sont indépendantes, donc la densité jointe de l'échantillon est le produit des densités :
 
 $$
-\boxed{\hat{\mathbf c} = \mathbf M^{-1} \mathbf w},
+L(\mathbf v \mid \mathbf c) = \prod_{i=1}^{N} p(v_i \mid \mathbf c)
+= \prod_{i=1}^{N} \frac{1}{\sqrt{2\pi}\,\sigma_i}\exp\!\left(-\frac{\big(v_i - \mu_i(\mathbf c)\big)^2}{2\sigma_i^2}\right)
+$$
+
+**Changement de point de vue.** Une fois les mesures faites, $\mathbf v$ est fixé : les $v_i$ sont des nombres et
+**ne dépendent pas du candidat $\mathbf c$**. On lit alors $L(\mathbf v \mid \mathbf c)$ comme une fonction de
+$\mathbf c$. Elle indique quels coefficients rendent les mesures observées les plus probables. L'estimateur du
+maximum de vraisemblance est le $\mathbf c$ qui la maximise. (On garde la notation du TP, $\ell(\chi \mid \mathbf c)$,
+avec $\mathbf v$ à la place de $\chi$.)
+
+**Remarque sur les positions.** Dans la simulation, les $x_i$ sont tirés uniformément sur $[0, L]$. Leur densité
+$1/L$ ne dépend pas de $\mathbf c$ : elle ajouterait seulement la constante $-N\ln L$ à la log-vraisemblance, sans
+déplacer le maximum. On peut donc raisonner à $\mathbf x$ fixé. Rigoureusement, on devrait écrire
+$\ell(\mathbf v \mid \mathbf x, \mathbf c)$ ; on garde $\ell(\mathbf v \mid \mathbf c)$ pour alléger.
+
+### 5.5 La log-vraisemblance
+
+On trouve :
+
+$$
+\ell(\mathbf v \mid \mathbf c) = \ln L(\mathbf v \mid \mathbf c)
+= \sum_{i=1}^{N}\left[-\frac{\big(v_i - \mu_i(\mathbf c)\big)^2}{2\sigma_i^2} - \ln\!\big(\sqrt{2\pi}\,\sigma_i\big)\right]
+$$
+
+$$
+\boxed{\ell(\mathbf v \mid \mathbf c) = -\sum_{i=1}^{N}\frac{1}{2\sigma_i^2}\Big[v_i - \sum_{n=0}^{d} c_n P_n(x_i)\Big]^2 - \sum_{i=1}^{N}\ln\!\big(\sqrt{2\pi}\,\sigma_i\big)}
+$$
+
+En supposant : $\forall i \in [1,N], \quad \sigma_i = \sigma_c$
+
+$$
+\boxed{\ell(\mathbf v \mid \mathbf c) = -\frac{1}{2\sigma_c^2}\sum_{i=1}^{N}\Big[v_i - \sum_{n=0}^{d} c_n P_n(x_i)\Big]^2 - N\ln\!\big(\sqrt{2\pi}\,\sigma_c\big)}
+$$
+
+
+### 5.6 Trois méthodes, une même démarche
+
+Les trois méthodes partent de la log-vraisemblance de 5.5. Elles ne diffèrent que par **ce que l'on sait des $\sigma_i$** :
+
+| Méthode | `estimator` | Ce qu'on sait des $\sigma_i$ | Inconnues | Section |
+|---|---|---|---|---|
+| 1 | `"sigma_constant"` (défaut, TP2) | $\forall i,\ \sigma_i = \sigma_c$, avec $\sigma_c$ inconnu | $\mathbf c$ et $\sigma_c$ | 5.7 |
+| 2 | `"sigma_variable"` | chaque $\sigma_i$ est différent et **connu** | $\mathbf c$ | 5.8 |
+| 3 | `"sigma_variable_inconnu"` | chaque $\sigma_i$ est différent et **inconnu**, mais on connaît leur **loi** | $\mathbf c$ | 5.9 |
+
+Pour chaque méthode, on suit les mêmes étapes :
+
+1. écrire la log-vraisemblance $\ell(\mathbf v \mid \mathbf c)$ ;
+2. annuler ses dérivées partielles $\partial_{c_n}\ell = 0$ pour chaque $n = 0, \dots, d$ (toutes ont la même forme : on
+   fait le calcul une seule fois pour un $n$ quelconque) ;
+3. résoudre le système obtenu pour trouver $\hat{\mathbf c}$.
+
+**Dérivée commune aux trois méthodes.** Dans $\mu_i(\mathbf c) = \sum_m c_m P_m(x_i)$, on note l'indice de somme $m$
+pour ne pas le confondre avec le $n$ de la dérivée. Seul le terme $m = n$ dépend de $c_n$, et $v_i$ n'en dépend pas :
+
+$$
+\partial_{c_n}\mu_i(\mathbf c) = P_n(x_i),
 \qquad
-M_{nm} = \sum_{i=1}^{N} \frac{x_i^{n+m}}{\sigma_i^2},
+\partial_{c_n} v_i = 0
+$$
+
+**Écriture matricielle.** On note $\mathbf P$ la matrice $N \times (d+1)$ de terme $\mathbf P_{i,n} = P_n(x_i)$
+(construite par `basis_matrix`). Alors $\mu_i(\mathbf c) = (\mathbf P\mathbf c)_i$.
+
+---
+
+### 5.7 Méthode 1 : $\sigma_c$ commun et inconnu (`"sigma_constant"`, TP2)
+
+**Hypothèse.** $\forall i \in [1,N],\ \sigma_i = \sigma_c$, avec $\sigma_c$ **inconnu**. On ne connaît que les
+$(x_i, v_i)$. On estime $\mathbf c$ **et** $\sigma_c$.
+
+**Log-vraisemblance.** C'est la seconde formule encadrée de 5.5 :
+
+$$
+\ell(\mathbf v \mid \mathbf c, \sigma_c) = -\frac{1}{2\sigma_c^2}\sum_{i=1}^{N}\Big[v_i - \mu_i(\mathbf c)\Big]^2 - N\ln\!\big(\sqrt{2\pi}\,\sigma_c\big)
+$$
+
+Le second terme ne dépend pas de $\mathbf c$, et $\frac{1}{2\sigma_c^2} > 0$. Maximiser $\ell$ en $\mathbf c$ revient
+donc à minimiser $\sum_i \big[v_i - \mu_i(\mathbf c)\big]^2$ : ce sont les **moindres carrés ordinaires**, où tous les
+points ont le même poids.
+
+**Annulation du gradient en $\mathbf c$.** La dérivée de $-\frac{(v_i-\mu_i)^2}{2\sigma_c^2}$ par rapport à $c_n$ vaut
+$\frac{v_i-\mu_i}{\sigma_c^2}\,P_n(x_i)$ :
+
+$$
+\partial_{c_n}\ell = \frac{1}{\sigma_c^2}\sum_{i=1}^{N}P_n(x_i)\Big(v_i - \sum_{m=0}^{d} c_m P_m(x_i)\Big) = 0
+$$
+
+$\sigma_c$ ne dépend pas de $i$ : on peut multiplier par $\sigma_c^2$, et il **disparaît**. On sépare les deux termes et
+on échange les sommes sur $i$ et sur $m$ :
+
+$$
+\sum_{m=0}^{d} c_m \underbrace{\sum_{i=1}^{N}P_n(x_i)\,P_m(x_i)}_{M_{nm}}
+= \underbrace{\sum_{i=1}^{N}P_n(x_i)\,v_i}_{w_n}
+\qquad n = 0, \dots, d
+$$
+
+**Estimateur de $\mathbf c$.** Les $d + 1$ équations forment le système linéaire $\mathbf M\mathbf c = \mathbf w$ (la
+ligne $n$ correspond à la dérivée par rapport à $c_n$) :
+
+$$
+\boxed{\hat{\mathbf c} = \mathbf M^{-1}\mathbf w}
 \qquad
-w_n = \sum_{i=1}^{N} \frac{x_i^n\, v_i}{\sigma_i^2}
-$$
-
-C'est la méthode des **moindres carrés pondérés** : on minimise $\sum_i (v_i - \hat v(x_i))^2 / \sigma_i^2$.
-Une voiture précise (petit $\sigma_i$) pèse plus dans l'estimation qu'une voiture imprécise. Cet estimateur
-suppose que l'on **connaît** les $\sigma_i$ (par exemple, chaque voiture envoie la précision de son capteur avec
-sa mesure). Dans la simulation, ce sont les $\sigma_i$ tirés par `Noise` (`bruit.last_sigmas`).
-
-**Cas du TP2 ($\sigma_i = \sigma$ pour tout $i$, estimateur `"sigma_constant"`).** Le facteur $1/\sigma^2$ est
-le même partout : il sort des deux sommes et se simplifie. On retrouve l'équation (1) du TP :
-
-$$
-\hat{\mathbf c} = \mathbf M^{-1} \mathbf w,
+\mathbf M = \mathbf P^\top \mathbf P,
 \qquad
-M_{nm} = \sum_{i=1}^{N} x_i^{n+m},
-\qquad
-w_n = \sum_{i=1}^{N} x_i^n\, v_i
+\mathbf w = \mathbf P^\top \mathbf v
 $$
 
-$\sigma$ a disparu : pas besoin de le connaître pour estimer les coefficients. C'est la méthode des
-**moindres carrés** ordinaires. On estime ensuite $\sigma$ en annulant la dérivée par rapport à $\sigma$ :
+C'est l'équation (1) du TP2. Le TP note ce vecteur $\mathbf v$ ; on l'appelle $\mathbf w$ pour ne pas le confondre
+avec les mesures. $\sigma_c$ n'apparaît pas dans $\hat{\mathbf c}$ : **pas besoin de le connaître pour estimer
+$\mathbf c$**.
+
+**Estimateur de $\sigma_c$.** On annule ensuite la dérivée par rapport à $\sigma_c$, en $\mathbf c = \hat{\mathbf c}$ :
 
 $$
-\hat\sigma^2 = \frac{1}{N} \sum_{i=1}^{N} \left(v_i - \hat v(x_i)\right)^2
+\partial_{\sigma_c}\ell = \frac{1}{\sigma_c^3}\sum_{i=1}^{N}\Big[v_i - \mu_i(\hat{\mathbf c})\Big]^2 - \frac{N}{\sigma_c} = 0
+\quad\Longrightarrow\quad
+\boxed{\hat\sigma_c^2 = \frac{1}{N}\sum_{i=1}^{N}\big(v_i - \mu_i(\hat{\mathbf c})\big)^2}
 $$
 
-(division par $N$ et non $N - d - 1$ : c'est le vrai maximum de vraisemblance, légèrement biaisé vers le bas,
-négligeable quand $N \gg d$).
+(division par $N$ et non par $N - d - 1$ : c'est le vrai maximum de vraisemblance.)
 
-(Le TP note le vecteur $\mathbf v$ ; on l'appelle ici $\mathbf w$ pour ne pas le confondre avec les vitesses $v_i$.)
+**C'est bien un maximum.** $\partial_{c_n}\partial_{c_m}\ell = -M_{nm}/\sigma_c^2$, donc la hessienne en $\mathbf c$ vaut
+$-\mathbf M/\sigma_c^2$. Or $\mathbf M = \mathbf P^\top \mathbf P$ est définie positive dès que $\mathbf P$ est de rang
+plein, ce qui est le cas avec au moins $d + 1$ positions distinctes. $\ell$ est donc concave en $\mathbf c$, et le point
+critique est l'unique maximum.
 
-**Écriture matricielle.** `basis_matrix(x, length, degree, basis)` construit la matrice $\mathbf P$ de taille
-$N \times (d + 1)$ avec $\mathbf P_{i,n} = x_i^n$ (matrice de Vandermonde). Avec la matrice diagonale des poids
+**Quand l'utiliser.** Quand on ne sait rien des $\sigma_i$. Dans notre simulation les $\sigma_i$ sont différents
+(section 0) : l'hypothèse est fausse. $\hat{\mathbf c}$ reste un estimateur raisonnable, mais ce n'est plus le maximum
+de vraisemblance du vrai modèle, et $\hat\sigma_c^2$ estime alors la moyenne des $\sigma_i^2$.
+
+> **Dans le code** : `MaximumLikelihood(L, d, estimator="sigma_constant").fit(x, v)`.
+> `est.M` et `est.w` contiennent $\mathbf M$ et $\mathbf w$ ; `est.sigma` contient $\hat\sigma_c$.
+
+---
+
+### 5.8 Méthode 2 : $\sigma_i$ différents et connus (`"sigma_variable"`)
+
+**Hypothèse.** Chaque véhicule $i$ a son propre $\sigma_i$ et le **transmet** avec sa mesure (c'est la précision de
+son capteur). On connaît les $(x_i, v_i, \sigma_i)$. On estime seulement $\mathbf c$. Dans la simulation, ce sont les
+$\sigma_i$ tirés par `Noise` (`bruit.last_sigmas`).
+
+**Log-vraisemblance.** C'est la première formule encadrée de 5.5 :
+
+$$
+\ell(\mathbf v \mid \mathbf c) = -\sum_{i=1}^{N}\frac{1}{2\sigma_i^2}\Big[v_i - \mu_i(\mathbf c)\Big]^2 - \sum_{i=1}^{N}\ln\!\big(\sqrt{2\pi}\,\sigma_i\big)
+$$
+
+Le second terme ne dépend pas de $\mathbf c$ (les $\sigma_i$ sont connus). Maximiser $\ell$ revient donc à minimiser la
+somme des carrés des écarts, chaque écart étant pondéré par $1/\sigma_i^2$ : ce sont des **moindres carrés pondérés**.
+Un capteur précis (petit $\sigma_i$) pèse davantage.
+
+**Annulation du gradient.** La dérivée de $-\frac{(v_i-\mu_i)^2}{2\sigma_i^2}$ vaut $\frac{v_i-\mu_i}{\sigma_i^2}\,P_n(x_i)$ :
+
+$$
+\partial_{c_n}\ell(\mathbf v \mid \mathbf c) = \sum_{i=1}^{N}\frac{P_n(x_i)}{\sigma_i^2}\Big(v_i - \sum_{m=0}^{d} c_m P_m(x_i)\Big) = 0
+$$
+
+Contrairement à la méthode 1, le facteur $1/\sigma_i^2$ **dépend de $i$** : il ne peut pas sortir de la somme sur $i$,
+et il reste donc **des deux côtés** :
+
+$$
+\sum_{m=0}^{d} c_m \underbrace{\sum_{i=1}^{N}\frac{P_n(x_i)\,P_m(x_i)}{\sigma_i^2}}_{\tilde M_{nm}}
+= \underbrace{\sum_{i=1}^{N}\frac{P_n(x_i)\,v_i}{\sigma_i^2}}_{\tilde w_n}
+\qquad n = 0, \dots, d
+$$
+
+**Estimateur.** Le système s'écrit $\tilde{\mathbf M}\mathbf c = \tilde{\mathbf w}$. Avec
 $\mathbf W = \mathrm{diag}(1/\sigma_1^2, \dots, 1/\sigma_N^2)$ :
 
 $$
-\mathbf M = \mathbf P^\top \mathbf W \mathbf P,
+\boxed{\hat{\mathbf c} = \tilde{\mathbf M}^{-1}\tilde{\mathbf w}}
 \qquad
-\mathbf w = \mathbf P^\top \mathbf W \mathbf v
+\tilde{\mathbf M} = \mathbf P^\top \mathbf W \mathbf P,
 \qquad
-(\mathbf W = \mathbf I \text{ pour } \texttt{"sigma\_constant"})
+\tilde{\mathbf w} = \mathbf P^\top \mathbf W\,\mathbf v
 $$
 
-### 5.4 La borne de Cramér-Rao (BCR)
+Il n'y a rien d'autre à estimer : les $\sigma_i$ sont donnés.
 
-Les dérivées secondes de $\ell$ ne dépendent pas des mesures :
+**C'est bien un maximum.** La hessienne vaut $-\tilde{\mathbf M}$, et $\tilde{\mathbf M}$ est définie positive dès
+que $\mathbf P$ est de rang plein (au moins $d + 1$ positions distinctes) : $\ell$ est concave, et le point critique
+est l'unique maximum.
+
+**Lien avec la méthode 1.** Si tous les $\sigma_i$ valent $\sigma_c$, alors $\tilde{\mathbf M} = \mathbf M/\sigma_c^2$
+et $\tilde{\mathbf w} = \mathbf w/\sigma_c^2$ : le facteur se simplifie et on retrouve $\hat{\mathbf c} = \mathbf M^{-1}\mathbf w$.
+La méthode 1 est un cas particulier de la méthode 2.
+
+> **Dans le code** : `MaximumLikelihood(L, d, estimator="sigma_variable").fit(x, v, sigmas=bruit.last_sigmas)`
+> (les `sigmas` sont obligatoires et doivent être $> 0$). `est.M` et `est.w` contiennent $\tilde{\mathbf M}$ et
+> $\tilde{\mathbf w}$ ; `est.sigmas` contient les $\sigma_i$ utilisés.
+
+---
+
+### 5.9 Méthode 3 : $\sigma_i$ différents et inconnus, de loi connue (`"sigma_variable_inconnu"`)
+
+**Hypothèse.** Chaque véhicule a son propre $\sigma_i$, mais on **ne le connaît pas**. On connaît seulement les
+$(x_i, v_i)$ et la **loi** des $\sigma_i$ (section 0, paramètres $\alpha_1, \alpha_2$). On estime $\mathbf c$.
+
+**On ne peut pas estimer les $\sigma_i$ un par un.** L'équation $\partial_{\sigma_i}\ell = 0$ donnerait
+$\hat\sigma_i^2 = (v_i - \mu_i)^2$ : on estimerait une variance avec un seul point. Pire, la vraisemblance part à
+$+\infty$ dès que le polynôme passe exactement par un point ($\sigma_i \to 0$). Il y aurait $N + d + 1$ inconnues pour
+$N$ mesures.
+
+**On intègre $\sigma_i$.** On traite $\sigma_i$ comme une variable aléatoire cachée dont on connaît la loi :
+$\sigma_i = \min(\max(S_i, \alpha_1), \alpha_2)$ avec $S_i \sim \mathcal N(\mu, s^2)$. Pour le calcul, on discrétise
+cette loi : $\sigma_i$ prend les valeurs $s_1, \dots, s_K$ (101 valeurs régulières entre $\alpha_1$ et $\alpha_2$) avec
+les probabilités $\pi_1, \dots, \pi_K$ (fonction `sigma_law`). En notant $\varphi_s$ la densité de $\mathcal N(0, s^2)$,
+le bruit $b_i$ suit alors un **mélange de gaussiennes**, le même pour tous les véhicules :
 
 $$
-\partial_{c_n} \partial_{c_m} \ell = -\sum_{i=1}^{N} \frac{x_i^n\, x_i^m}{\sigma_i^2}
-\quad\Longrightarrow\quad
-\mathbf I_F = \mathbf M \ \text{(avec les poids } 1/\sigma_i^2\text{)},
+f(b) = \sum_{k=1}^{K} \pi_k \, \varphi_{s_k}(b),
 \qquad
-\mathrm{BCR} = \mathbf I_F^{-1}
+\varphi_{s}(b) = \frac{1}{\sqrt{2\pi}\, s} \exp\!\left(-\frac{b^2}{2 s^2}\right)
 $$
 
-| Estimateur | $\mathbf M$ | $\mathbf I_F$ | BCR |
+**Log-vraisemblance.** Les mesures restent indépendantes, et $v_i - \mu_i(\mathbf c)$ a pour densité $f$ :
+
+$$
+\boxed{\ell_{\text{mél}}(\mathbf v \mid \mathbf c) = \sum_{i=1}^{N} \ln f\big(v_i - \mu_i(\mathbf c)\big)}
+$$
+
+**Annulation du gradient.** On note $r_i = v_i - \mu_i(\mathbf c)$ le résidu du véhicule $i$, de sorte que
+$\partial_{c_n} r_i = -P_n(x_i)$. Comme $\varphi_s'(b) = -\frac{b}{s^2}\varphi_s(b)$, on a
+$f'(r) = -r \sum_k \pi_k \varphi_{s_k}(r)/s_k^2$, d'où :
+
+$$
+\partial_{c_n}\ell_{\text{mél}}
+= \sum_{i=1}^{N} \frac{f'(r_i)}{f(r_i)}\,\big(-P_n(x_i)\big)
+= \sum_{i=1}^{N} \omega_i \, P_n(x_i)\Big(v_i - \sum_{m=0}^{d} c_m P_m(x_i)\Big) = 0
+$$
+
+$$
+\text{avec}\qquad
+\omega_i = \frac{\sum_k \pi_k \, \varphi_{s_k}(r_i) / s_k^2}{\sum_k \pi_k \, \varphi_{s_k}(r_i)}
+= \mathbb E\!\left[\frac{1}{\sigma_i^2} \,\middle|\, r_i\right]
+$$
+
+(Par la formule de Bayes, $\pi_k \varphi_{s_k}(r_i) / \sum_{k'} \pi_{k'} \varphi_{s_{k'}}(r_i)$ est la probabilité que
+$\sigma_i = s_k$ sachant le résidu $r_i$ : $\omega_i$ est donc la moyenne des $1/s_k^2$ pondérée par ces probabilités.)
+
+C'est **exactement l'équation de la méthode 2**, avec $\omega_i$ à la place de $1/\sigma_i^2$. Un véhicule dont le
+résidu est grand a probablement un grand $\sigma_i$ : il reçoit un petit poids.
+
+**Pas de formule directe : l'algorithme EM.** Les poids $\omega_i$ dépendent de $\mathbf c$ (à travers les $r_i$) : le
+système n'est plus linéaire. On itère :
+
+1. **Départ** : $\hat{\mathbf c}$ de la méthode 1 ($\mathbf M^{-1}\mathbf w$).
+2. **Étape E** : on calcule les poids $\omega_i$ avec les résidus actuels $r_i = v_i - \mu_i(\hat{\mathbf c})$.
+3. **Étape M** : on résout le système pondéré de la méthode 2 avec ces poids,
+   $\hat{\mathbf c} = \tilde{\mathbf M}^{-1}\tilde{\mathbf w}$ avec $\mathbf W = \mathrm{diag}(\omega_1, \dots, \omega_N)$.
+4. On recommence tant que $\ell_{\text{mél}}$ augmente (elle augmente à chaque tour : c'est une propriété de l'EM).
+
+En pratique, l'algorithme converge en 5 à 10 tours.
+
+**Lien avec les méthodes 1 et 2.** Si la plage $[\alpha_1, \alpha_2]$ est très étroite, tous les $\omega_i$ sont
+presque égaux et on retrouve la méthode 1. Plus les $\sigma_i$ sont dispersés, plus les poids $\omega_i$ diffèrent et
+plus la méthode 3 s'en éloigne. Elle ne peut cependant pas faire aussi bien que la méthode 2, qui connaît les vrais
+$\sigma_i$. Si la loi supposée est fausse, l'estimateur reste raisonnable mais ce n'est plus le maximum de
+vraisemblance.
+
+> **Dans le code** : `MaximumLikelihood(L, d, estimator="sigma_variable_inconnu", sigma_range=(alpha1, alpha2)).fit(x, v)`
+> (`sigma_range` obligatoire, avec $0 < \alpha_1 < \alpha_2$). `est.weights` contient les poids $\omega_i$ finaux,
+> `est.n_iter` le nombre de tours, `est.log_likelihood` la valeur $\ell_{\text{mél}}(\hat{\mathbf c})$ ; `est.M` et
+> `est.w` contiennent $\tilde{\mathbf M}$ et $\tilde{\mathbf w}$ avec les poids $\omega_i$.
+
+---
+
+### 5.10 Bilan des trois méthodes
+
+| | Méthode 1 `"sigma_constant"` | Méthode 2 `"sigma_variable"` | Méthode 3 `"sigma_variable_inconnu"` |
 |---|---|---|---|
-| `"sigma_variable"` | $\sum_i x_i^{n+m} / \sigma_i^2$ | $\mathbf M$ | $\mathbf M^{-1}$ |
-| `"sigma_constant"` (TP2) | $\sum_i x_i^{n+m}$ | $\mathbf M / \sigma^2$ | $\sigma^2\, \mathbf M^{-1}$ (calculée avec $\hat\sigma$) |
+| Données | $(x_i, v_i)$ | $(x_i, v_i, \sigma_i)$ | $(x_i, v_i)$ + loi des $\sigma_i$ |
+| Log-vraisemblance | $\ell(\mathbf v \mid \mathbf c, \sigma_c)$ | $\ell(\mathbf v \mid \mathbf c)$ | $\ell_{\text{mél}}(\mathbf v \mid \mathbf c)$ |
+| Poids du point $i$ | $1$ | $1/\sigma_i^2$ | $\omega_i = \mathbb E[1/\sigma_i^2 \mid r_i]$ |
+| Estimateur | $\hat{\mathbf c} = \mathbf M^{-1}\mathbf w$ | $\hat{\mathbf c} = \tilde{\mathbf M}^{-1}\tilde{\mathbf w}$ | EM (moindres carrés pondérés répétés) |
+| Calcul | direct | direct | itératif |
+| Autre sortie | $\hat\sigma_c$ | — | poids $\omega_i$ |
 
-- Sur la diagonale : $\sqrt{\mathrm{BCR}_{nn}}$ est le plus petit écart-type possible pour estimer $c_n$ sans biais.
-- Hors diagonale : la covariance entre $\hat c_n$ et $\hat c_m$. Un terme non nul signifie que les erreurs sur
-  $c_n$ et $c_m$ sont **liées** (si l'un est surestimé, l'autre a tendance à être sous- ou surestimé).
+Si tous les $\sigma_i$ sont égaux, les trois méthodes donnent le même $\hat{\mathbf c}$ (les poids se simplifient ;
+vérifié par `test_equal_sigmas_give_the_same_estimate_as_sigma_constant` et
+`test_narrow_sigma_range_gives_the_same_estimate_as_sigma_constant`).
 
-Les deux estimateurs sont **sans biais** (l'espérance de $\mathbf w$ vaut $\mathbf M \mathbf c$ dans les deux cas).
-Sous le bon modèle, chacun **atteint** sa borne :
+### 5.11 Pourquoi la base de Legendre ?
 
-- `"sigma_variable"` atteint $\mathbf M^{-1}$ quand les $\sigma_i$ sont vraiment différents (notre cas) ;
-- `"sigma_constant"` atteint $\sigma^2 \mathbf M^{-1}$ quand le bruit est vraiment de même $\sigma$ partout.
+En base canonique, les colonnes $1, \xi, \xi^2, \dots$ se ressemblent beaucoup sur $[0, 1]$ (elles sont toutes
+croissantes) : $\mathbf M$ a de grands termes hors diagonale. Les coefficients estimés se **compensent** alors : une
+erreur sur $c_1$ peut être rattrapée par une erreur de signe opposé sur $c_2$, si bien que la courbe reste bonne alors
+que les coefficients sont loin des vrais. En base de Legendre ($t = 2x/L - 1$) avec des $t_i$ uniformes sur $[-1, 1]$
+(c'est le cas : les positions sont tirées uniformément, section 2), $M_{nm} \simeq 0$ pour $n \neq m$ (TP2,
+section 1.4) : $\mathbf M$ est **quasi diagonale**, et chaque équation du système porte presque sur un seul
+coefficient. Cela reste vrai pour $\tilde{\mathbf M}$, tant que les poids ne dépendent pas de la position.
 
-Quand les $\sigma_i$ sont différents, `"sigma_constant"` reste sans biais mais **ne l'atteint plus** : sa vraie
-covariance est $\mathbf M_0^{-1} \left(\sum_i \sigma_i^2\, \mathbf p_i \mathbf p_i^\top\right) \mathbf M_0^{-1}$
-(avec $\mathbf M_0 = \sum_i \mathbf p_i \mathbf p_i^\top$, $\mathbf p_i = (1, x_i, \dots, x_i^d)$), toujours
-supérieure ou égale à la borne $\mathbf M^{-1}$ de l'estimateur pondéré. Sa « BCR » $\hat\sigma^2 \mathbf M_0^{-1}$
-n'est alors qu'une approximation.
+Changer de base ne change **pas** la courbe estimée $\mu(\hat{\mathbf c})$ (les deux bases décrivent les mêmes
+polynômes, vérifié par `test_legendre_basis_gives_the_same_curve_as_canonical`). Seuls les **coefficients** et leur
+interprétation changent. La quasi-orthogonalité est perdue si les $x_i$ ne sont plus uniformes sur le tronçon.
 
-Les tests le vérifient par Monte-Carlo (2000 tirages du bruit aux mêmes positions et mêmes $\sigma_i$) :
-`test_empirical_covariance_matches_the_crb` (cas $\sigma$ constant) et
-`test_sigma_variable_reaches_its_crb_and_beats_sigma_constant` (cas $\sigma_i$ variables : l'estimateur pondéré
-atteint $\mathbf M^{-1}$ et a une variance plus petite que celui du TP2 sur chaque coefficient).
-
-### 5.5 Quel estimateur choisir ?
-
-- Si les $\sigma_i$ sont **connus** : `"sigma_variable"`, qui est le vrai maximum de vraisemblance de notre modèle.
-- Si on ne connaît **pas** les $\sigma_i$ : `"sigma_constant"`. Il reste sans biais, il est seulement un peu moins
-  précis, et $\hat\sigma^2$ estime alors la moyenne des $\sigma_i^2$.
-- Si tous les $\sigma_i$ sont égaux, les deux donnent **exactement** le même $\hat{\mathbf c}$ (les poids se
-  simplifient ; vérifié par `test_equal_sigmas_give_the_same_estimate_as_sigma_constant`).
-
-Le gain du pondéré grandit quand les $\sigma_i$ sont très différents les uns des autres. Avec
-$[\alpha_1, \alpha_2] = [2, 8]$ km/h, les $\sigma_i$ sont concentrés autour de 5 km/h ($s = 1$ km/h) : le gain
-est modeste (section 5.8).
-
-### 5.6 Pourquoi la base de Legendre ?
-
-En base canonique, les colonnes $1, x, x^2, \dots$ se ressemblent beaucoup sur $[0, 1]$ (elles sont toutes
-croissantes) : $\mathbf M$ a de grands termes hors diagonale, donc les coefficients estimés sont **fortement
-corrélés** et individuellement peu précis. En base de Legendre ($t = 2x/L - 1$) avec des $t_i$ uniformes sur
-$[-1, 1]$ (c'est le cas : les positions sont tirées uniformément, section 2), $M_{nm} \simeq 0$ pour $n \neq m$
-(TP2, section 1.4) : $\mathbf M$ et la BCR sont **quasi diagonales**, les coefficients sont presque décorrélés.
-Cela reste vrai avec les poids $1/\sigma_i^2$, tant que les $\sigma_i$ ne dépendent pas de la position.
-
-Changer de base ne change **pas** la courbe estimée $\hat v(x)$ (les deux bases décrivent les mêmes polynômes,
-vérifié par `test_legendre_basis_gives_the_same_curve_as_canonical`). Seuls les **coefficients** et leur
-interprétation changent. L'orthogonalité est perdue si les $x_i$ ne sont plus uniformes sur le tronçon.
-
-### 5.7 La classe `MaximumLikelihood`
+### 5.12 La classe `MaximumLikelihood`
 
 ```python
-est = MaximumLikelihood(length=2000, degree=2, basis="canonique", estimator="sigma_variable")
-est.fit(x, v, sigmas=bruit.last_sigmas)  # "sigma_variable" : sigmas obligatoires
-#   ou : MaximumLikelihood(2000, 2).fit(x, v)   # "sigma_constant" (défaut, TP2) : pas besoin des sigmas
-est.coefficients                # [c0, ..., cd] estimés DANS LA BASE CHOISIE
+est = MaximumLikelihood(length=2000, degree=2, basis="canonique", estimator="sigma_constant")
+est.fit(x, v)                                   # méthode 1 (défaut, TP2)
+#   ou : MaximumLikelihood(2000, 2, estimator="sigma_variable").fit(x, v, sigmas=bruit.last_sigmas)   # méthode 2
+#   ou : MaximumLikelihood(2000, 2, estimator="sigma_variable_inconnu", sigma_range=(2, 8)).fit(x, v) # méthode 3
+est.coefficients                # [c0, ..., c_d] estimés DANS LA BASE CHOISIE
 est.canonical_coefficients      # convertis en base canonique (comparables à SpeedPolynomial)
-est.sigma                       # "sigma_constant" : sigma_chapeau [km/h] ; "sigma_variable" : None
-est.sigmas                      # "sigma_variable" : les sigma_i utilisés
-est.M, est.w                    # la matrice M et le vecteur w (avec les poids 1/sigma_i²)
-est.fisher_information()        # I_F
-est.crb()                       # BCR = I_F^-1
+est.sigma                       # méthode 1 : sigma_c chapeau [km/h] ; sinon None
+est.sigmas                      # méthode 2 : les sigma_i utilisés
+est.weights, est.n_iter         # méthode 3 : poids omega_i finaux, nombre de tours de l'EM
+est.M, est.w                    # M, w (méthode 1) ou M_tilde, w_tilde (méthodes 2 et 3)
 est.speed(1000)                 # vitesse estimée en x = 1000 m
 ```
 
-- **`__init__`** : mémorise $L$, $d$, la base et l'estimateur ; refuse $L \le 0$, $d < 1$, une base ou un
-  estimateur inconnus.
+- **`__init__`** : mémorise $L$, $d$, la base et la méthode ; refuse $L \le 0$, $d < 1$, une base ou une méthode
+  inconnues. Pour la méthode 3, `sigma_range=(alpha1, alpha2)` est obligatoire (avec $0 < \alpha_1 < \alpha_2$) et la
+  loi des $\sigma_i$ est discrétisée tout de suite (`sigma_law`).
 - **`fit(x, v, sigmas=None)`** :
-  1. vérifie que `x` et `v` ont la même taille et qu'il y a au moins $d + 1$ points (sinon $\mathbf M$ n'est pas
+  1. vérifie que `x` et `v` ont la même taille et qu'il y a au moins $d + 1$ points (sinon la matrice n'est pas
      inversible) ;
-  2. poids : $1/\sigma_i^2$ pour `"sigma_variable"` (les `sigmas` doivent être fournis, de la bonne taille et
-     $> 0$), $1$ pour `"sigma_constant"` (les `sigmas` éventuels sont ignorés) ;
-  3. construit $\mathbf P$, puis $\mathbf M = \mathbf P^\top \mathbf W \mathbf P$ et $\mathbf w = \mathbf P^\top \mathbf W \mathbf v$ ;
-  4. résout $\mathbf M \mathbf c = \mathbf w$ avec `np.linalg.solve` (même résultat que $\mathbf M^{-1}\mathbf w$,
-     mais sans calculer l'inverse, ce qui est plus précis numériquement) ;
-  5. pour `"sigma_constant"` seulement : $\hat\sigma = \sqrt{\text{moyenne des résidus}^2}$ ;
+  2. poids : $1$ pour la méthode 1 (les `sigmas` éventuels sont ignorés), $1/\sigma_i^2$ pour la méthode 2 (les
+     `sigmas` doivent être fournis, de la bonne taille et $> 0$) ;
+  3. construit $\mathbf P$, puis $\mathbf P^\top \mathbf W \mathbf P$ et $\mathbf P^\top \mathbf W \mathbf v$
+     ($\mathbf W = \mathbf I$ pour la méthode 1), rangés dans `est.M` et `est.w` ;
+  4. résout le système avec `np.linalg.solve` (même résultat que d'inverser la matrice, mais plus précis
+     numériquement) ;
+  5. méthode 1 : $\hat\sigma_c = \sqrt{\text{moyenne des résidus}^2}$ ; méthode 3 : le résultat des étapes 3-4 (la
+     méthode 1) sert de départ à l'algorithme EM de 5.9 (méthode `_fit_em`) ;
   6. renvoie `self`, ce qui permet d'écrire `MaximumLikelihood(L, d).fit(x, v)` en une ligne.
-- **`fisher_information(sigma=None)`**, **`crb(sigma=None)`** : voir le tableau de 5.4. Pour `"sigma_constant"`,
-  on peut passer le vrai $\sigma$ (simulation) au lieu de $\hat\sigma$ ; pour `"sigma_variable"`, l'argument est
-  ignoré.
 - **`canonical_coefficients`** : pour Legendre, convertit $\sum c_n \mathrm{Leg}_n(t)$ en polynôme en $t$, puis
   remplace $t$ par $2\xi - 1$.
-- **`speed(x)`** : renvoie $\hat v(x)$ ; lève une erreur si `fit` n'a pas été appelé.
+- **`speed(x)`** : renvoie $\mu(\hat{\mathbf c})$ en $x$ ; lève une erreur si `fit` n'a pas été appelé.
 
-### 5.8 Exemple chiffré (graine 42)
+### 5.13 Exemple chiffré (graine 42)
 
 Paramètres du début du document : $L = 2000$ m, $V_0 = 70$, $V_L = 80$, $d = 2$, 100 voitures, graine 42,
 $\sigma_i$ tirés dans $[2, 8]$ km/h (on obtient des $\sigma_i$ entre 2,87 et 7,91 km/h, $\sqrt{\text{moyenne des } \sigma_i^2} = 5{,}08$ km/h).
-Estimation avec le bon degré.
+Estimation avec le bon degré, coefficients en base canonique :
 
-**Coefficients en base canonique.**
-
-| | $c_0$ | $c_1$ | $c_2$ | $\hat\sigma$ | écart à la vraie courbe (RMS) |
-|---|---|---|---|---|---|
-| vrai | 70,00 | 68,29 | −58,29 | | |
-| `"sigma_constant"` | 71,71 | 62,43 | −55,35 | 5,05 | 0,91 km/h |
-| `"sigma_variable"` | 71,10 | 65,79 | −58,70 | — | 0,89 km/h |
-
-**Écarts-types de la BCR** $\sqrt{\mathrm{BCR}_{nn}}$ :
-
-| | canonique, `sigma_constant` | canonique, `sigma_variable` | Legendre, `sigma_constant` | Legendre, `sigma_variable` |
+| | $c_0$ | $c_1$ | $c_2$ | $\hat\sigma_c$ |
 |---|---|---|---|---|
-| $c_0$ | 1,57 | 1,50 | 0,51 | 0,47 |
-| $c_1$ | 7,49 | 7,05 | 0,94 | 0,86 |
-| $c_2$ | 7,53 | 6,95 | 1,26 | 1,16 |
+| vrai $\mathbf c^*$ | 70,00 | 68,29 | −58,29 | |
+| méthode 1 `"sigma_constant"` | 71,71 | 62,43 | −55,35 | 5,05 |
+| méthode 2 `"sigma_variable"` | 71,10 | 65,79 | −58,70 | — |
+| méthode 3 `"sigma_variable_inconnu"` | 71,42 | 62,97 | −55,52 | — |
 
-**Monte-Carlo** (5000 tirages du bruit, mêmes positions et mêmes $\sigma_i$, base canonique) : écarts-types
-empiriques (1,57 ; 7,40 ; 7,33) pour `"sigma_constant"` contre (1,49 ; 6,96 ; 6,88) pour `"sigma_variable"`, et
-écart moyen à la vraie courbe 0,85 km/h contre 0,79 km/h. L'estimateur pondéré est environ 6 % plus précis ici ;
-le gain serait plus grand avec une plage $[\alpha_1, \alpha_2]$ plus large.
+$\hat\sigma_c = 5{,}05$ km/h est proche de $\sqrt{\text{moyenne des } \sigma_i^2} = 5{,}08$ km/h : comme annoncé en 5.7,
+la méthode 1 estime la moyenne des $\sigma_i^2$. Les vrais coefficients en base de Legendre sont
+$(84{,}71 ;\ 5{,}00 ;\ -9{,}71)$.
 
-**Corrélations** ($\mathrm{BCR}_{nm} / \sqrt{\mathrm{BCR}_{nn}\mathrm{BCR}_{mm}}$, `"sigma_variable"`) :
+### 5.14 Limites à connaître
 
-| | canonique | Legendre |
-|---|---|---|
-| $(c_0, c_1)$ | −0,88 | 0,04 |
-| $(c_1, c_2)$ | −0,97 | 0,07 |
-| $(c_0, c_2)$ | 0,77 | 0,11 |
-
-En base canonique, $c_1$ et $c_2$ sont corrélés à −0,97 : une erreur sur $c_1$ est presque compensée par une erreur
-de signe opposé sur $c_2$, ce qui explique que la courbe reste bonne alors que les coefficients sont loin. En
-Legendre, chaque coefficient est estimé presque indépendamment des autres, avec des barres d'erreur bien plus
-petites (vrais coefficients de Legendre : 84,71 ; 5,00 ; −9,71).
-
-### 5.9 Limites à connaître
-
-- **Bruit non gaussien** (autre loi, valeurs aberrantes) : la formule de 5.2 n'est plus la bonne vraisemblance,
-  et les moindres carrés deviennent sensibles aux points aberrants (le TP2, section 2, traite le cas Poisson
+- **Bruit non gaussien** (autre loi, valeurs aberrantes) : les log-vraisemblances de 5.5 et 5.9 ne sont plus les
+  bonnes, et les moindres carrés deviennent sensibles aux points aberrants (le TP2, section 2, traite le cas Poisson
   avec un algorithme itératif).
-- **$\sigma_i$ inconnus** : `"sigma_variable"` n'est pas utilisable tel quel ; on revient à `"sigma_constant"`.
-  Si on donne des $\sigma_i$ faux, l'estimateur reste sans biais mais n'est plus optimal, et sa BCR $\mathbf M^{-1}$
-  est fausse.
+- **$\sigma_i$ faux** (méthode 2) : si on donne des $\sigma_i$ erronés, l'estimateur reste non biaisé mais n'est plus
+  le maximum de vraisemblance.
+- **Loi des $\sigma_i$ fausse** (méthode 3) : la méthode suppose la loi de `Noise` avec la bonne plage
+  $[\alpha_1, \alpha_2]$. Avec une autre loi, elle reste raisonnable mais n'est plus le maximum de vraisemblance.
 - **Mauvais degré** : `main_04` permet de tester `D_ESTIME = D + 1` (le terme en trop est estimé proche de 0
-  mais augmente la variance, surtout en base canonique) ou `D_ESTIME = D - 1` (la courbe ne peut plus suivre la
-  vraie forme : biais).
+  mais rend l'estimation plus instable, surtout en base canonique) ou `D_ESTIME = D - 1` (la courbe ne peut plus suivre
+  la vraie forme : biais).
 
 > **Pour essayer** : `python tests/mains/main_04_maximum_vraisemblance.py` (paramètres `ESTIMATEUR` et `BASE`)
-> trace les mesures, la vraie courbe, l'estimation et une bande $\pm$ `N_SIGMA` $\cdot\,\sigma$ global, et affiche
-> l'écart à la vraie courbe des **deux** estimateurs ; `pytest tests/test_maximum_likelihood.py -v` lance les tests.
+> trace les mesures, la vraie courbe, l'estimation et une bande $\pm$ `N_SIGMA` $\cdot\,\sigma$ global ;
+> `python tests/mains/main_05_comparaison_estimateurs.py` trace les trois méthodes sur le même graphe ;
+> `pytest tests/test_maximum_likelihood.py -v` lance les tests.
 
 ---
 
@@ -578,8 +745,8 @@ petites (vrais coefficients de Legendre : 84,71 ; 5,00 ; −9,71).
 | Vitesse mesurée = vraie + bruit | `src/vitesse/measurements.py` | `simulate_speeds` |
 | Tout enchaîner | `tests/mains/main_03_simulation.py` | `main()` |
 | Matrice $\mathbf P_{i,n} = P_n(x_i)$ (canonique / Legendre) | `src/vitesse/maximum_likelihood.py` | `basis_matrix` |
-| Log-vraisemblance | `src/vitesse/maximum_likelihood.py` | `log_likelihood` |
-| Estimer $\hat{\mathbf c} = \mathbf M^{-1}\mathbf w$ (`sigma_constant` ou `sigma_variable`) | `src/vitesse/maximum_likelihood.py` | `MaximumLikelihood.fit`, `.speed` |
-| Information de Fisher, BCR | `src/vitesse/maximum_likelihood.py` | `MaximumLikelihood.fisher_information`, `.crb` |
+| Log-vraisemblance (méthodes 1 et 2) | `src/vitesse/maximum_likelihood.py` | `log_likelihood` |
+| Méthode 3 : loi discrétisée des $\sigma_i$, $\ell_{\text{mél}}$ | `src/vitesse/maximum_likelihood.py` | `sigma_law`, `mixture_log_likelihood` |
+| Estimer $\hat{\mathbf c}$ (méthodes 1, 2 et 3) | `src/vitesse/maximum_likelihood.py` | `MaximumLikelihood.fit`, `._fit_em`, `.speed` |
 | Simuler puis estimer | `tests/mains/main_04_maximum_vraisemblance.py` | `main()` |
-| Comparer les deux estimateurs sur un même graphe | `tests/mains/main_05_comparaison_estimateurs.py` | `main()` |
+| Comparer les trois méthodes sur un même graphe | `tests/mains/main_05_comparaison_estimateurs.py` | `main()` |
