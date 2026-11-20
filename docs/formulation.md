@@ -73,9 +73,13 @@ $$
  
  2. Différentes variances sur les véhicules (car précision des capteurs différente) : **fait** (simulation des $\sigma_i$ dans `noise.py`, estimation de $\alpha_1$, $\alpha_2$ dans `maximum_likelihood.py`)
 
- **À faire pour la prochaine séance**
+## A faire
+- Caractérisation : 
 
-
+      - biais de l'estimateur 
+      - BCR
+      - Correlation entre les coefficients et base de légendre
+      - 1M fois un même polynome et calculer variance de l'estimateur et le comparer à la BCR
 
 
 
