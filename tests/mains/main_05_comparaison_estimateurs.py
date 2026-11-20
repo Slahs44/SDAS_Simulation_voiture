@@ -20,7 +20,7 @@ V_LIMITE = 90.0                         # limite de vitesse du tronçon [km/h]
 D = 6                                   # degré du polynôme
 COEFS_LIBRES = None                     # None = calcul automatique ; ou une liste [c2, ..., cd]
 ALPHA1, ALPHA2 = 2.0, 8.0               # plage des sigma_i [km/h] : 99,7 % des sigma_i entre ALPHA1 et ALPHA2
-N_POINTS = 100                          # nombre de points mesurés (= de voitures)
+N_POINTS = 1000                          # nombre de points mesurés (= de voitures)
 BASE = "canonique"                      # base des polynômes pour l'estimation : "canonique" ou "legendre"
 D_ESTIME = D                            # degré utilisé pour l'estimation (en vrai il est « connu » : = D ; essaie D+1 ou D-1)
 GRAINE = None                           # None = aléatoire (graine affichée) ; un entier = reproductible
@@ -69,7 +69,7 @@ def main():
                                     gridspec_kw={"height_ratios": [3, 1.3]})
 
     # Les mesures sont colorées selon leur sigma_i : les voitures précises (foncées) pèsent plus pour "sigma_variable"
-    nuage = haut.scatter(x, v, c=sigmas, cmap="viridis_r", vmin=ALPHA1, vmax=ALPHA2, s=22, alpha=0.85,
+    nuage = haut.scatter(x, v, c=sigmas, cmap="viridis_r", marker="+", linewidths=0.8, vmin=ALPHA1, vmax=ALPHA2, s=22, alpha=0.8,
                          label=f"mesures ({N_POINTS} voitures)")
     fig.colorbar(nuage, ax=[haut, bas], pad=0.01, label="sigma_i de la voiture [km/h]")
     haut.plot(grille, vraie_courbe, "b-", lw=2.2, label="vraie vitesse v(x)")
