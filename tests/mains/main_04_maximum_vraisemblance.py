@@ -1,9 +1,8 @@
 """Main 4 - Retrouver le polynôme par maximum de vraisemblance.
 On simule des mesures (polynôme + bruit normal, un sigma_i par voiture), puis on estime les coefficients par
-la méthode du TP2 (c_chapeau = M^-1 · w), et on compare à la vérité. Trois estimateurs au choix (ESTIMATEUR) :
-  - "sigma_constant" : TP2, on suppose le même sigma pour toutes les voitures (sigma estimé à partir des mesures) ;
-  - "sigma_variable" : chaque voiture a son sigma_i, supposé connu ; chaque point est pondéré par 1 / sigma_i² ;
-  - "sigma_variable_inconnu" : sigma_i différents mais inconnus, seule leur loi est connue (algorithme EM)."""
+la méthode du TP2 (c_chapeau = M^-1 · w), et on compare à la vérité. Deux estimateurs au choix (ESTIMATEUR) :
+  - "sigma_constant" : TP2, on suppose le même sigma pour toutes les voitures (sigma n'est pas estimé) ;
+  - "sigma_variable" : chaque voiture a son sigma_i, supposé connu ; chaque point est pondéré par 1 / sigma_i²."""
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -24,7 +23,7 @@ ALPHA1, ALPHA2 = 2.0, 8.0               # plage des sigma_i [km/h] : 99,7 % des 
 N_POINTS = 100                          # nombre de points mesurés
 N_SIGMA = 2.0                           # largeur de la bande : ± N_SIGMA · sigma global (1 -> ~68 % des mesures, 2 -> ~95 %, 3 -> ~99,7 %)
 BASE = "canonique"                      # base des polynômes pour l'estimation : "canonique" ou "legendre"
-ESTIMATEUR = "sigma_variable"           # "sigma_constant" (TP2), "sigma_variable" (sigma_i connus) ou "sigma_variable_inconnu" (EM)
+ESTIMATEUR = "sigma_variable"           # "sigma_constant" (TP2) ou "sigma_variable" (sigma_i connus)
 D_ESTIME = D                            # degré utilisé pour l'estimation (en vrai il est « connu » : = D ; essaie D+1 ou D-1)
 GRAINE = None                           # None = aléatoire (graine affichée) ; un entier = reproductible
 AFFICHER = True                         # True : ouvre la fenêtre du graphique ; False : sauvegarde seulement
@@ -42,34 +41,25 @@ def main():
 
     # 2) Estimer par maximum de vraisemblance (on n'utilise que x, v et, pour "sigma_variable", les sigma_i)
     def estimer(choix):
-        return MaximumLikelihood(LONGUEUR, D_ESTIME, BASE, choix, sigma_range=(ALPHA1, ALPHA2)).fit(
-            x, v, sigmas=bruit.last_sigmas)
+        return MaximumLikelihood(LONGUEUR, D_ESTIME, BASE, choix).fit(x, v, sigmas=bruit.last_sigmas)
     estimateur = estimer(ESTIMATEUR)
-    autres = [estimer(nom) for nom in ("sigma_constant", "sigma_variable", "sigma_variable_inconnu") if nom != ESTIMATEUR]
+    autres = [estimer(nom) for nom in ("sigma_constant", "sigma_variable") if nom != ESTIMATEUR]
 
     # 3) Comparer à la vérité
     print("coefficients vrais    :", np.round(vrai.coefficients, 2))
     print("coefficients estimes  :", np.round(estimateur.canonical_coefficients, 2))
-    if ESTIMATEUR == "sigma_constant":
-        sigma_bande = estimateur.sigma                                    # sigma_chapeau, estimé sur les résidus
-        print(f"sigma global : vrai {sigma_global_vrai:.2f}   estime {estimateur.sigma:.2f} km/h")
-    elif ESTIMATEUR == "sigma_variable_inconnu":
-        sigma_bande = sigma_global_vrai                                   # sigma global de la loi supposée connue
-        print(f"sigma_i inconnus, loi connue : sigma_i dans [{ALPHA1}, {ALPHA2}] km/h "
-              f"(EM : {estimateur.n_iter} tours)")
-    else:
-        sigma_bande = sigma_global_vrai                                   # les sigma_i sont connus
-        print(f"sigma_i connus : de {bruit.last_sigmas.min():.2f} a {bruit.last_sigmas.max():.2f} km/h "
-              f"(sigma global {sigma_global_vrai:.2f} km/h)")
+    print(f"sigma_i simules : de {bruit.last_sigmas.min():.2f} a {bruit.last_sigmas.max():.2f} km/h "
+          f"(sigma global {sigma_global_vrai:.2f} km/h)")
     grille = np.linspace(0, LONGUEUR, 300)
     for est in [estimateur] + autres:
         nom = est.estimator
         erreur = est.speed(grille) - vrai.speed(grille)
         print(f"erreur sur la courbe ({nom:22s}) : RMSE = {np.sqrt(np.mean(erreur ** 2)):.2f} km/h, "
               f"erreur max = {np.abs(erreur).max():.2f} km/h")
-    print("ecarts-types de la BCR :", np.round(np.sqrt(np.diag(estimateur.crb())), 2))
+    # BCR : "sigma_constant" n'estime pas sigma, on lui donne le sigma global simulé (ignoré par "sigma_variable")
+    print("ecarts-types de la BCR :", np.round(np.sqrt(np.diag(estimateur.crb(sigma=sigma_global_vrai))), 2))
     centre = estimateur.speed(grille)
-    demi_largeur = N_SIGMA * sigma_bande
+    demi_largeur = N_SIGMA * sigma_global_vrai
     dans_bande = np.abs(v - estimateur.speed(x)) <= demi_largeur
     print(f"bande ±{N_SIGMA} sigma global = ±{demi_largeur:.1f} km/h : {np.mean(dans_bande):.0%} des mesures dedans")
     print(f"graine utilisee : {graine}   (pour regenerer : GRAINE = {graine})")

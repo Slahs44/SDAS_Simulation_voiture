@@ -22,7 +22,7 @@ pip install -r requirements.txt
 | `polynomial.py` | classe `SpeedPolynomial` : calcule c0..cd pour que v(0) = V0 et v(L) = VL. Si on ne donne pas les coefficients libres, ils sont choisis automatiquement (polynôme le plus proche de la limite de vitesse, sans la dépasser, accélération bornée) |
 | `polynomial_tools.py` | fonctions utilisées par `SpeedPolynomial` : calcul des coefficients, vitesse, accélération (a = v·dv/dx), et recherche automatique des coefficients libres |
 | `measurements.py` | 2 fonctions : `generate_positions` (positions au hasard) et `simulate_speeds` (vitesse + bruit) |
-| `maximum_likelihood.py` | classe `MaximumLikelihood` : estime c0..cd (base `"canonique"` ou `"legendre"`) à partir des mesures par la méthode du TP2 (ĉ = M⁻¹·w), avec trois estimateurs : `"sigma_constant"` (un seul σ, estimé), `"sigma_variable"` (σ_i connus, moindres carrés pondérés par 1/σ_i²) ou `"sigma_variable_inconnu"` (σ_i différents mais inconnus, seule leur loi est connue : algorithme EM) ; donne aussi l'information de Fisher et la borne de Cramér-Rao |
+| `maximum_likelihood.py` | classe `MaximumLikelihood` : estime c0..cd (base `"canonique"` ou `"legendre"`) à partir des mesures par la méthode du TP2 (ĉ = M⁻¹·w), avec deux estimateurs : `"sigma_constant"` (un seul σ, non estimé) ou `"sigma_variable"` (σ_i connus, moindres carrés pondérés par 1/σ_i²) ; donne aussi l'information de Fisher et la borne de Cramér-Rao |
 
 ## Utilisation
 ```bash
@@ -31,7 +31,7 @@ python tests/mains/main_01_polynome.py      # le polynôme seul
 python tests/mains/main_02_bruit.py         # le bruit seul : histogramme des sigma_i par voiture + histogramme du bruit
 python tests/mains/main_03_simulation.py    # polynôme + bruit = points mesurés (couleur = sigma_i de la voiture)
 python tests/mains/main_04_maximum_vraisemblance.py   # retrouver v(x) par maximum de vraisemblance
-python tests/mains/main_05_comparaison_estimateurs.py # les 3 estimateurs (sigma constant / sigma_i connus / sigma_i inconnus) sur un même graphe
+python tests/mains/main_05_comparaison_estimateurs.py # les 2 estimateurs (sigma constant / sigma_i connus) sur un même graphe
 python src/vitesse/noise.py                 # vérification du sigma variable par voiture (règle des 3 sigma)
 ```
 Chaque main (et chaque test) commence par une section **PARAMETRES** : c'est là qu'on change les valeurs.

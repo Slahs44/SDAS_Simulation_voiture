@@ -4,8 +4,7 @@ import pytest
 from scipy.optimize import minimize
 
 from vitesse import (MaximumLikelihood, Noise, SpeedPolynomial, create_rng, generate_positions, log_likelihood,
-                     mixture_log_likelihood, simulate_speeds)
-from vitesse.maximum_likelihood import noise_information
+                     simulate_speeds)
 
 # ----------------------------------------------------------------------
 # 1. PARAMETRES
@@ -21,7 +20,6 @@ N_POINTS = 2000                      # beaucoup de points pour une estimation pr
 N_PEU = 200                          # moins de points (comparaison de la précision)
 GRAINE = 0                           # graine aléatoire
 TOL_COEF = 3.0                       # tolérance sur les coefficients estimés [km/h]
-TOL_SIGMA = 0.3                      # tolérance sur sigma estimé [km/h]
 
 
 def donnees(n, sigma=SIGMA, graine=GRAINE):
@@ -47,14 +45,12 @@ def fixe():
 
 
 # ------------------- données à sigma_i variables (un par voiture) -------------------
-def test_variable_sigma_data_coefficients_and_global_sigma_are_recovered():
+def test_variable_sigma_data_coefficients_are_recovered():
     # Méthode du TP2 appliquée à des mesures dont chaque voiture a son propre sigma_i :
-    # les coefficients restent bien estimés, et sigma_chapeau ≈ écart-type global = racine(E[sigma_i²]).
+    # les coefficients restent bien estimés.
     poly, x, v = donnees_variables(N_BEAUCOUP)
     est = MaximumLikelihood(LONGUEUR, D).fit(x, v)
     np.testing.assert_allclose(est.coefficients, poly.coefficients, atol=TOL_COEF)
-    sigma_global = np.sqrt(((ALPHA1 + ALPHA2) / 2) ** 2 + ((ALPHA2 - ALPHA1) / 6) ** 2)
-    assert est.sigma == pytest.approx(sigma_global, abs=TOL_SIGMA)
 
 
 # ------------------- modèle simple : sigma fixe (moindres carrés) -------------------
@@ -62,14 +58,12 @@ def test_without_noise_the_polynomial_is_recovered_exactly():
     poly, x, v = donnees(50, sigma=0.0)
     est = fixe().fit(x, v)
     np.testing.assert_allclose(est.coefficients, poly.coefficients, atol=1e-6)
-    assert est.sigma == pytest.approx(0.0, abs=1e-6)
 
 
-def test_with_noise_coefficients_and_sigma_are_close_to_the_truth():
+def test_with_noise_coefficients_are_close_to_the_truth():
     poly, x, v = donnees(N_POINTS)
     est = fixe().fit(x, v)
     np.testing.assert_allclose(est.coefficients, poly.coefficients, atol=TOL_COEF)
-    assert est.sigma == pytest.approx(SIGMA, abs=TOL_SIGMA)
 
 
 def test_more_points_give_a_better_estimate():
@@ -84,23 +78,20 @@ def test_more_points_give_a_better_estimate():
 
 def test_estimate_maximizes_the_log_likelihood():
     # On compare l'estimation exacte à une maximisation NUMERIQUE de log L (scipy) : on doit trouver la même chose.
+    # La valeur de sigma ne change pas le maximum en c (le facteur 1/sigma² sort de la somme) : on prend SIGMA.
     _, x, v = donnees(N_PEU)
     est = fixe().fit(x, v)
-
-    def moins_log_l(p):                              # p = [c0, c1, c2, log(sigma)]  (log pour garder sigma > 0)
-        return -log_likelihood(p[:-1], np.exp(p[-1]), x, v, LONGUEUR)
-
-    depart = np.array([60.0, 10.0, 0.0, np.log(3.0)])
-    res = minimize(moins_log_l, depart, method="Nelder-Mead", options={"xatol": 1e-8, "fatol": 1e-10, "maxiter": 20000, "maxfev": 20000})
-    np.testing.assert_allclose(res.x[:-1], est.coefficients, atol=0.05)
-    assert np.exp(res.x[-1]) == pytest.approx(est.sigma, abs=0.01)
+    depart = np.array([60.0, 10.0, 0.0])
+    res = minimize(lambda c: -log_likelihood(c, SIGMA, x, v, LONGUEUR), depart, method="Nelder-Mead",
+                   options={"xatol": 1e-8, "fatol": 1e-10, "maxiter": 20000, "maxfev": 20000})
+    np.testing.assert_allclose(res.x, est.coefficients, atol=0.05)
 
 
 def test_log_likelihood_is_lower_for_other_coefficients():
     _, x, v = donnees(N_PEU)
     est = fixe().fit(x, v)
-    ll_opt = log_likelihood(est.coefficients, est.sigma, x, v, LONGUEUR)
-    ll_autre = log_likelihood(est.coefficients + np.array([0.0, 5.0, -5.0]), est.sigma, x, v, LONGUEUR)
+    ll_opt = log_likelihood(est.coefficients, SIGMA, x, v, LONGUEUR)
+    ll_autre = log_likelihood(est.coefficients + np.array([0.0, 5.0, -5.0]), SIGMA, x, v, LONGUEUR)
     assert ll_opt > ll_autre
 
 
@@ -122,7 +113,6 @@ def test_legendre_basis_gives_the_same_curve_as_canonical():
     xs = np.linspace(0, LONGUEUR, 50)
     np.testing.assert_allclose(leg.speed(xs), can.speed(xs), atol=1e-8)
     np.testing.assert_allclose(leg.canonical_coefficients, can.coefficients, atol=1e-8)
-    assert leg.sigma == pytest.approx(can.sigma)
 
 
 def test_legendre_matrix_is_almost_diagonal():
@@ -146,6 +136,13 @@ def test_empirical_covariance_matches_the_crb():
     bcr = MaximumLikelihood(LONGUEUR, D).fit(x, poly.speed(x) + 1.0).crb(sigma=SIGMA)
     np.testing.assert_allclose(estimes.mean(axis=0), poly.coefficients, atol=0.5)       # sans biais
     np.testing.assert_allclose(np.diag(np.cov(estimes.T)), np.diag(bcr), rtol=0.1)      # atteint la BCR
+
+
+def test_crb_of_sigma_constant_needs_sigma():
+    # sigma n'est pas estimé : il faut le donner pour calculer la BCR de "sigma_constant".
+    _, x, v = donnees(N_PEU)
+    with pytest.raises(ValueError):
+        fixe().fit(x, v).crb()
 
 
 def test_unknown_basis_is_rejected():
@@ -223,61 +220,3 @@ def test_unknown_estimator_is_rejected():
     with pytest.raises(ValueError):
         MaximumLikelihood(LONGUEUR, D, estimator="robuste")
 
-
-# ----------------------------------------------------------------------
-# Estimateur "sigma_variable_inconnu" : sigma_i différents, NON connus, de loi connue (algorithme EM)
-# ----------------------------------------------------------------------
-LARGE = (0.5, 20.0)                  # plage large : les sigma_i sont très différents, le gain se voit mieux
-
-
-def test_sigma_variable_inconnu_maximizes_the_mixture_log_likelihood():
-    # Maximisation NUMERIQUE de la vraisemblance du mélange : on doit retrouver le résultat de l'EM.
-    _, x, v, _ = donnees_sigma_variable(N_PEU)
-    est = MaximumLikelihood(LONGUEUR, D, estimator="sigma_variable_inconnu", sigma_range=(ALPHA1, ALPHA2)).fit(x, v)
-    res = minimize(lambda c: -mixture_log_likelihood(c, x, v, LONGUEUR, (ALPHA1, ALPHA2)), est.coefficients + 1.0,
-                   method="Nelder-Mead", options={"xatol": 1e-8, "fatol": 1e-10, "maxiter": 20000, "maxfev": 20000})
-    np.testing.assert_allclose(res.x, est.coefficients, atol=0.05)
-    assert est.n_iter < est.max_iter                                     # l'EM a convergé
-    cst = MaximumLikelihood(LONGUEUR, D).fit(x, v)                       # le TP2 fait moins bien sur ce critère
-    assert est.log_likelihood >= mixture_log_likelihood(cst.coefficients, x, v, LONGUEUR, (ALPHA1, ALPHA2))
-
-
-def test_narrow_sigma_range_gives_the_same_estimate_as_sigma_constant():
-    # Si tous les sigma_i sont (presque) égaux, les poids omega_i sont égaux : on retrouve le TP2.
-    _, x, v = donnees(N_PEU)
-    cst = MaximumLikelihood(LONGUEUR, D).fit(x, v)
-    inc = MaximumLikelihood(LONGUEUR, D, estimator="sigma_variable_inconnu", sigma_range=(SIGMA, SIGMA * 1.0001)).fit(x, v)
-    np.testing.assert_allclose(inc.coefficients, cst.coefficients, atol=1e-6)
-
-
-def test_noise_information_is_between_the_two_other_estimators():
-    # 1/E[sigma²] <= i_b <= E[1/sigma²] : ne pas connaître les sigma_i coûte, mais moins qu'ignorer qu'ils diffèrent.
-    rng, _ = create_rng(GRAINE)
-    for plage in ((ALPHA1, ALPHA2), LARGE):
-        s = Noise("normale", rng=rng, sigma_range=plage).sample_sigmas(400_000)
-        assert 1 / np.mean(s ** 2) < noise_information(plage) < np.mean(1 / s ** 2)
-
-
-def test_sigma_variable_inconnu_beats_sigma_constant_and_reaches_its_crb():
-    # Monte-Carlo : à chaque tirage, de NOUVEAUX sigma_i (inconnus) et un nouveau bruit.
-    _, x, _ = donnees(200)
-    poly = SpeedPolynomial(LONGUEUR, V0, VL, D, COEFS_LIBRES)
-    rng, _ = create_rng(GRAINE + 1)
-    bruit = Noise("normale", rng=rng, sigma_range=LARGE)
-    est_inc, est_cst = [], []
-    for _ in range(1000):
-        v = poly.speed(x) + bruit.sample(len(x))
-        est_inc.append(MaximumLikelihood(LONGUEUR, D, estimator="sigma_variable_inconnu", sigma_range=LARGE).fit(x, v).coefficients)
-        est_cst.append(MaximumLikelihood(LONGUEUR, D).fit(x, v).coefficients)
-    est_inc, est_cst = np.array(est_inc), np.array(est_cst)
-    bcr = MaximumLikelihood(LONGUEUR, D, estimator="sigma_variable_inconnu", sigma_range=LARGE).fit(x, poly.speed(x)).crb()
-    np.testing.assert_allclose(est_inc.mean(axis=0), poly.coefficients, atol=1.0)                 # sans biais
-    np.testing.assert_allclose(np.diag(np.cov(est_inc.T)), np.diag(bcr), rtol=0.15)               # proche de la BCR
-    assert np.all(np.diag(np.cov(est_inc.T)) < np.diag(np.cov(est_cst.T)))                        # mieux que le TP2
-
-
-def test_sigma_variable_inconnu_needs_a_valid_sigma_range():
-    with pytest.raises(ValueError):
-        MaximumLikelihood(LONGUEUR, D, estimator="sigma_variable_inconnu")                       # loi manquante
-    with pytest.raises(ValueError):
-        MaximumLikelihood(LONGUEUR, D, estimator="sigma_variable_inconnu", sigma_range=(0.0, 8.0))  # sigma = 0 possible

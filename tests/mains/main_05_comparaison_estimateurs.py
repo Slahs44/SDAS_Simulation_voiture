@@ -1,9 +1,8 @@
-"""Main 5 - Comparer les trois estimateurs du maximum de vraisemblance sur les MEMES mesures.
+"""Main 5 - Comparer les deux estimateurs du maximum de vraisemblance sur les MEMES mesures.
 On simule des mesures (polynôme + bruit normal, un sigma_i par voiture), puis on estime le polynôme avec :
   - "sigma_constant" : TP2, on suppose le même sigma pour toutes les voitures (moindres carrés ordinaires) ;
-  - "sigma_variable" : chaque voiture a son sigma_i, supposé connu (moindres carrés pondérés par 1 / sigma_i²) ;
-  - "sigma_variable_inconnu" : les sigma_i sont différents mais inconnus, seule leur loi est connue (algorithme EM).
-Les trois estimations sont tracées sur le même graphe, avec en dessous leur erreur par rapport à la vraie courbe."""
+  - "sigma_variable" : chaque voiture a son sigma_i, supposé connu (moindres carrés pondérés par 1 / sigma_i²).
+Les deux estimations sont tracées sur le même graphe, avec en dessous leur erreur par rapport à la vraie courbe."""
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -30,7 +29,6 @@ AFFICHER = True                         # True : ouvre la fenêtre du graphique 
 ESTIMATEURS = {                         # nom -> (couleur, style de trait, légende)
     "sigma_constant": ("tab:green", "--", "sigma constant (TP2)"),
     "sigma_variable": ("tab:orange", "-.", "sigma_i connus (pondéré 1/sigma_i²)"),
-    "sigma_variable_inconnu": ("tab:purple", ":", "sigma_i inconnus, loi connue (EM)"),
 }
 
 
@@ -45,10 +43,9 @@ def main():
     sigmas = bruit.last_sigmas
     sigma_global_vrai = np.sqrt(np.mean(sigmas ** 2))              # écart-type global du bruit simulé
 
-    # 2) Estimer avec les trois estimateurs, sur les mêmes mesures
-    #    (sigmas ne sert qu'à "sigma_variable", sigma_range qu'à "sigma_variable_inconnu")
-    estimations = {nom: MaximumLikelihood(LONGUEUR, D_ESTIME, BASE, nom, sigma_range=(ALPHA1, ALPHA2))
-                   .fit(x, v, sigmas=sigmas) for nom in ESTIMATEURS}
+    # 2) Estimer avec les deux estimateurs, sur les mêmes mesures (sigmas ne sert qu'à "sigma_variable")
+    estimations = {nom: MaximumLikelihood(LONGUEUR, D_ESTIME, BASE, nom).fit(x, v, sigmas=sigmas)
+                   for nom in ESTIMATEURS}
 
     # 3) Comparer à la vérité
     grille = np.linspace(0, LONGUEUR, 300)
@@ -59,15 +56,12 @@ def main():
     for nom, est in estimations.items():
         erreurs[nom] = est.speed(grille) - vraie_courbe
         print(f"coefficients estimes ({nom:22s}) :", np.round(est.canonical_coefficients, 2))
-    if estimations["sigma_constant"].sigma is not None:
-        print(f"sigma_chapeau (sigma_constant) : {estimations['sigma_constant'].sigma:.2f} km/h")
-    print(f"algorithme EM (sigma_variable_inconnu) : {estimations['sigma_variable_inconnu'].n_iter} tours")
     print()
     print(f"{'estimateur':22s} {'RMSE courbe':>12s} {'erreur max':>11s}   ecarts-types de la BCR")
     for nom, est in estimations.items():
         e = erreurs[nom]
         print(f"{nom:22s} {np.sqrt(np.mean(e ** 2)):9.2f} km/h {np.abs(e).max():7.2f} km/h   "
-              f"{np.round(np.sqrt(np.diag(est.crb())), 2)}")
+              f"{np.round(np.sqrt(np.diag(est.crb(sigma=sigma_global_vrai))), 2)}")   # sigma : pour "sigma_constant"
     print(f"graine utilisee : {graine}   (pour regenerer : GRAINE = {graine})")
 
     # 4) Tracer : en haut les mesures et les deux estimations, en bas l'erreur de chaque estimation
@@ -84,7 +78,7 @@ def main():
         haut.plot(grille, estimations[nom].speed(grille), color=couleur, ls=style, lw=2,
                   label=f"{legende} : RMSE {rmse:.2f} km/h")
     haut.set_ylabel("vitesse [km/h]")
-    haut.set_title(f"Trois estimateurs du maximum de vraisemblance (degré {D_ESTIME}, base {BASE})\n"
+    haut.set_title(f"Deux estimateurs du maximum de vraisemblance (degré {D_ESTIME}, base {BASE})\n"
                    f"sigma_i dans [{ALPHA1}, {ALPHA2}] km/h, graine {graine}")
     haut.grid(alpha=0.3)
     haut.legend(fontsize=9)
